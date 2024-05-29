@@ -549,7 +549,11 @@ class NDList<X> {
       // final sliceStep = _product(singleSliceShape);
       final sliceEnd = end > priorResult.shape[0] ? priorResult.shape[0] : end;
       // trivial slice
-      final sliceLength = sliceEnd - start;
+      var sliceLength = sliceEnd - start;
+      // SKETCHY, fix this for real
+      if (sliceLength == 0) {
+        sliceLength = 1;
+      }
       final listIndices = [
         for (int i = start; i < sliceEnd; i++)
           ..._intIndex(priorResult, i).parentIndices
@@ -571,21 +575,7 @@ class NDList<X> {
       ...axis0Slices.first.shape.sublist(1)
     ];
 
-    return priorResult.resolveStep(resolvedIndices, resolvedShape);
-
-    // final subtensorIndices = _enumerateSubtensors(priorResult.shape, axis);
-    // final indicesAndSubTensors = subtensorIndices
-    //     .map((e) => _listIndex(priorResult, e))
-    //     .map((subtensorResult) {
-    //   return _slice(subtensorResult, start, end, axis: axis - 1);
-    // }).toList();
-
-    // final shapeBeforeAxis = priorResult.shape.sublist(0, axis);
-
-    // final resolvedIndices = indicesAndSubTensors.expand((e) => e.parentIndices);
-
-    // return priorResult.resolveStep(resolvedIndices.toList(),
-    //     shapeBeforeAxis + indicesAndSubTensors.first.shape);
+    return NDIndexResult(priorResult.parent, resolvedIndices, resolvedShape);
   }
 
   /// !! (Remember we index the axes from 0.)
