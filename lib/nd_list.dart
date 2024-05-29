@@ -545,15 +545,9 @@ class NDList<X> {
     }
 
     if (axis == 0) {
-      // final singleSliceShape = priorResult.shape.sublist(1);
-      // final sliceStep = _product(singleSliceShape);
       final sliceEnd = end > priorResult.shape[0] ? priorResult.shape[0] : end;
       // trivial slice
       var sliceLength = sliceEnd - start;
-      // SKETCHY, fix this for real
-      if (sliceLength == 0) {
-        sliceLength = 1;
-      }
       final listIndices = [
         for (int i = start; i < sliceEnd; i++)
           ..._intIndex(priorResult, i).parentIndices

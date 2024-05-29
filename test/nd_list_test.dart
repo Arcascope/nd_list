@@ -236,16 +236,17 @@ void main() {
     test('Shape of axis-j index, j=0,1,2 : 3D', () {
       final array = NumNDList.zeros<double>([3, 4, 2]);
 
-      // for (var i = 0; i < 3; i++) {
-      //   final slice = array[i];
-      //   expect(slice.shape, equals([1, 4, 2]));
-      // }
+      for (var i = 0; i < array.shape[0]; i++) {
+        final slice = array[i];
+        expect(slice.shape, equals([1, 4, 2]));
+      }
 
-      // for (var i = 0; i < 4; i++) {
-      //   final slice = array[[':', i]];
-      //   expect(slice.shape, equals([3, 1, 2]));
-      // }
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < array.shape[1]; i++) {
+        final slice = array[[':', i]];
+        expect(slice.shape, equals([3, 1, 2]));
+      }
+
+      for (var i = 0; i < array.shape[2]; i++) {
         final slice = array.slice(i, i + 1, axis: 2);
         expect(slice.shape, equals([3, 4, 1]));
       }
