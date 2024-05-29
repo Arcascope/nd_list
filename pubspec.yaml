@@ -1,0 +1,16 @@
+name: nd_list
+description: Provides NumPy-like multi-dimensional list that implements slicing and broadcasting.
+version: 1.0.0
+repository: https://github.com/Arcascope/nd_list
+
+environment:
+  sdk: ^3.3.4
+
+# Add regular dependencies here.
+dependencies:
+  tflite_flutter: ^0.10.4
+  # path: ^1.8.0
+
+dev_dependencies:
+  lints: ^4.0.0
+  test: ^1.24.0
