@@ -1,2 +1,2 @@
-A sample command-line application with an entrypoint in `bin/`, library code
-in `lib/`, and example unit test in `test/`.
+# NDList
+Provides a generic, strongly typed multidimensional list. These lists allow slicing and indexing, and broadcasting of functions across them.
