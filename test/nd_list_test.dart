@@ -187,7 +187,7 @@ void main() {
     });
   });
 
-  group('NDList<double> indexing', () {
+  group('Basic operators', () {
     test('==', () {
       final data = [
         [1.0, 2.0],
@@ -205,7 +205,23 @@ void main() {
       // and do not equal others
       expect(ndList0 == ndList, isFalse);
     });
-
+  });
+  group('NDList<double> indexing', () {
+    /// How does shape change on indexing?
+    ///
+    /// dim = 1, shape (n, )
+    /// arr[i] shape (1, )
+    ///
+    /// dim = 2, shape (n, m)
+    /// arr[i] shape (1, m)
+    /// arr[:, j] shape (n, 1)
+    ///
+    /// dim = 3, shape (n, m, p)
+    /// arr[i] shape (1, m, p)
+    /// arr[:, j] shape (n, 1, p)
+    /// arr[:, :, k] shape (n, m, 1)
+    ///
+    ///
     test('1d Indexing with int', () {
       final data = [91.0, 92.0, 94.0];
       final ndList = NDList.from<double>(data);

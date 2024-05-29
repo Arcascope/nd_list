@@ -1,19 +1,4 @@
-/// How does shape change on indexing?
-///
-/// dim = 1, shape (n, )
-/// arr[i] shape (1, )
-///
-/// dim = 2, shape (n, m)
-/// arr[i] shape (1, m)
-/// arr[:, j] shape (n, 1)
-///
-/// dim = 3, shape (n, m, p)
-/// arr[i] shape (1, m, p)
-/// arr[:, j] shape (n, 1, p)
-/// arr[:, :, k] shape (n, m, 1)
-///
-///
-import 'package:tflite_flutter/tflite_flutter.dart';
+library nd_list;
 
 List<int> unsqueezeShape(List<int> shape, int axis) {
   if (axis < 0) {
@@ -75,10 +60,7 @@ class NDIndexResult<X> {
   }
 }
 
-typedef EnumeratedSliceResult<X> = (List<int>, NDList<X>);
-
-/// Wrapper on multi-dimensional lists to provide easier indexing and slicing.
-/// This class is inspired by NumPy's ndarray.
+/// Gives a strongly typed multidimensional list which can be sliced, indexed, and reshaped. The API is inspired by NumPy's ndarray. We implement lazy indexing to facilitate composition and code re-use, as well as speed for complex operations.
 ///
 /// Example:
 /// ```dart
@@ -87,7 +69,7 @@ typedef EnumeratedSliceResult<X> = (List<int>, NDList<X>);
 /// [4.0, 5.0, 6.0],
 /// [7.0, 8.0, 9.0]
 /// ];
-/// final ndList = NDList.from<double>(data);
+/// final NDList<double> ndList = NDList.from<double>(data);
 ///
 /// final sliced = ndList[['1:3', '0:2']];
 /// ```
@@ -98,7 +80,127 @@ class NDList<X> {
   final List<int> _shape = [];
 
   List toIteratedList() {
-    return _list.reshape(shape);
+    // Note! Originally from tflite_flutter's ListShape extension.
+    // Since this is the only method using tflite_flutter, and we are both using Apache 2.0, I have copied the code here. All rights to the original author.
+    // return _list.reshape(shape);
+
+    var dims = shape.length;
+    var numElements = 1;
+    for (var i = 0; i < dims; i++) {
+      numElements *= shape[i];
+    }
+
+    if (numElements != count) {
+      throw ArgumentError(
+          'Total elements mismatch expected: $numElements elements for shape: $shape but found $count');
+    }
+
+    if (dims <= 5) {
+      switch (dims) {
+        case 2:
+          return _reshape2(shape);
+        case 3:
+          return _reshape3(shape);
+        case 4:
+          return _reshape4(shape);
+        case 5:
+          return _reshape5(shape);
+      }
+    }
+
+    var reshapedList = _list as List;
+    for (var i = dims - 1; i > 0; i--) {
+      var temp = [];
+      for (var start = 0;
+          start + shape[i] <= reshapedList.length;
+          start += shape[i]) {
+        temp.add(reshapedList.sublist(start, start + shape[i]));
+      }
+      reshapedList = temp;
+    }
+    return reshapedList;
+  }
+
+  List<List<X>> _reshape2(List<int> shape) {
+    var flatList = _list;
+    List<List<X>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => flatList[i * shape[1] + j],
+      ),
+    );
+
+    return reshapedList;
+  }
+
+  List<List<List<T>>> _reshape3<T>(List<int> shape) {
+    var flatList = _list as List;
+    List<List<List<T>>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => List.generate(
+          shape[2],
+          // (k) => flatList[i * shape[1] * shape[2] + j * shape[2] + k],
+          (k) => flatList[getLinearIndex(shape.sublist(1), [i, j, k])],
+        ),
+      ),
+    );
+
+    return reshapedList;
+  }
+
+  List<List<List<List<T>>>> _reshape4<T>(List<int> shape) {
+    var flatList = _list as List;
+
+    List<List<List<List<T>>>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => List.generate(
+          shape[2],
+          (k) => List.generate(
+            shape[3],
+            (l) => flatList[getLinearIndex(shape.sublist(1), [i, j, k, l])],
+            // (l) => flatList[i * shape[1] * shape[2] * shape[3] +
+            //     j * shape[2] * shape[3] +
+            //     k * shape[3] +
+            //     l],
+          ),
+        ),
+      ),
+    );
+
+    return reshapedList;
+  }
+
+  List<List<List<List<List<T>>>>> _reshape5<T>(List<int> shape) {
+    var flatList = _list as List;
+    List<List<List<List<List<T>>>>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => List.generate(
+          shape[2],
+          (k) => List.generate(
+            shape[3],
+            (l) => List.generate(
+              shape[4],
+              (m) =>
+                  flatList[getLinearIndex(shape.sublist(1), [i, j, k, l, m])],
+              // (m) => flatList[i * shape[1] * shape[2] * shape[3] * shape[4] +
+              //     j * shape[2] * shape[3] * shape[4] +
+              //     k * shape[3] * shape[4] +
+              //     l * shape[4] +
+              //     m],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return reshapedList;
   }
 
   @override
