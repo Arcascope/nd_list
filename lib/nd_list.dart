@@ -528,6 +528,14 @@ class NDList<X> {
 
     if (axis > 0 && priorResult.shape.contains(1)) {
       final indexOf1 = priorResult.shape.indexOf(1);
+      if (indexOf1 == axis) {
+        if (start == 0 && end == 1) {
+          return priorResult;
+        } else {
+          throw ArgumentError(
+              'Cannot slice from $start to $end on axis $axis of an NDList with shape ${priorResult.shape}');
+        }
+      }
       final reducedShape = [
         for (var i in range(priorResult.shape.length)) priorResult.shape[i]
       ];

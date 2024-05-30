@@ -720,7 +720,8 @@ void main() {
           reason: 'explicit slice has wrong data');
     });
 
-    test('Empty slice', () {
+    // if (start == end) {...}
+    test('start == end (Empty slice)', () {
       // 1 d
       final nd1d = NDList.from<double>([1.0, 2.0, 3.0, 4.0]);
       for (int i = 0; i < nd1d.shape[0]; i++) {
@@ -752,6 +753,72 @@ void main() {
           expect(slice.count, 0);
           expect(slice.shape, [0]);
         }
+      }
+    });
+
+    // if (axis > 0 && priorResult.shape.contains(1)) {...}
+    test('axis > 0 && priorResult.shape[0] == 1', () {
+      final ndList = NumNDList.zeros([1, 2, 3]);
+
+      final sliceAxis1 = ndList.slice(0, 1, axis: 1);
+      final sliceAxis2 = ndList.slice(0, 1, axis: 2);
+
+      expect(sliceAxis1.shape, equals([1, 1, 3]),
+          reason: "Axis 1 slice has the wrong shape");
+      expect(sliceAxis2.shape, equals([1, 2, 1]),
+          reason: "Axis 2 slice has the wrong shape");
+    });
+
+    test('axis > 0 && priorResult.shape[1] == 1', () {
+      final ndList = NumNDList.zeros([2, 1, 3]);
+
+      final sliceAxis1 = ndList.slice(0, 1, axis: 1);
+      final sliceAxis2 = ndList.slice(0, 1, axis: 2);
+
+      expect(sliceAxis1.shape, equals([2, 1, 3]),
+          reason: "Axis 1 slice has the wrong shape");
+      expect(sliceAxis2.shape, equals([2, 1, 1]),
+          reason: "Axis 2 slice has the wrong shape");
+    });
+
+    test('axis > 0 && priorResult.shape[2] == 1', () {
+      final ndList = NumNDList.zeros([2, 3, 1]);
+
+      final sliceAxis1 = ndList.slice(0, 1, axis: 1);
+      final sliceAxis2 = ndList.slice(0, 1, axis: 2);
+
+      expect(sliceAxis1.shape, equals([2, 1, 1]),
+          reason: "Axis 1 slice has the wrong shape");
+      expect(sliceAxis2.shape, equals([2, 3, 1]),
+          reason: "Axis 2 slice has the wrong shape");
+    });
+
+    // if (axis > priorResult.shape.length - 1) {...}
+    test('Axis too large', () {
+      final ndList = NumNDList.zeros([2, 3, 4]);
+
+      expect(() => ndList.slice(0, 1, axis: 3), throwsArgumentError);
+      expect(() => ndList.slice(0, 1, axis: 4), throwsArgumentError);
+    });
+
+    // if (start == 0 && end == shape[axis]) {...}
+    // this is tested elsewhere via full slice tests, but just to do an really thorough check in here.
+    test('Full slice, 3D', () {
+      final ndList = NumNDList.zeros([2, 3, 4]);
+
+      final sliceStrings = <String>[];
+
+      // test we can use full-slice syntax on 3D list, every axis
+      for (var i = 0; i < ndList.nDims; i++) {
+        final fullSlice = ndList.slice(0, ndList.shape[i], axis: i);
+        expect(fullSlice.shape, equals([2, 3, 4]));
+        expect(fullSlice, equals(ndList));
+
+        // [] => [':'] => [':', ':'] => [':', ':', ':']
+        sliceStrings.add(':');
+        final fullSlice2 = ndList[sliceStrings];
+        expect(fullSlice2.shape, equals([2, 3, 4]));
+        expect(fullSlice2, equals(ndList));
       }
     });
   });
