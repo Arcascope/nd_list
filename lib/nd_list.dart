@@ -45,6 +45,7 @@ class NDIndexResult<X> {
   ///
   /// We got `this` from an index, so it references a subtensor of `parent`. When we do the next step in the index, we are putting that index on the subtensor. This method resolves the indices on the subtensor to the indices on the parent tensor.
   NDIndexResult<X> resolveStep(List<int> subtensorIndices, List<int> newShape) {
+    // TODO: remove print
     print("Resolving step: new shape $newShape");
     print("finding indices: $subtensorIndices from $parentIndices");
     final newParentIndices = [for (int i in subtensorIndices) parentIndices[i]];
@@ -81,7 +82,7 @@ class NDList<X> {
 
   List toIteratedList() {
     // Note! Originally from tflite_flutter's ListShape extension.
-    // Since this is the only method using tflite_flutter, and we are both using Apache 2.0, I have copied the code here. All rights to the original author.
+    // Since this is the only method using tflite_flutter, and we are both using Apache 2.0, I have copied the code here. All rights to the original author(s).
     // return _list.reshape(shape);
 
     var dims = shape.length;
@@ -143,7 +144,7 @@ class NDList<X> {
         (j) => List.generate(
           shape[2],
           // (k) => flatList[i * shape[1] * shape[2] + j * shape[2] + k],
-          (k) => flatList[getLinearIndex(shape.sublist(1), [i, j, k])],
+          (k) => flatList[getLinearIndex(shape, [i, j, k])],
         ),
       ),
     );
@@ -162,7 +163,7 @@ class NDList<X> {
           shape[2],
           (k) => List.generate(
             shape[3],
-            (l) => flatList[getLinearIndex(shape.sublist(1), [i, j, k, l])],
+            (l) => flatList[getLinearIndex(shape, [i, j, k, l])],
             // (l) => flatList[i * shape[1] * shape[2] * shape[3] +
             //     j * shape[2] * shape[3] +
             //     k * shape[3] +
@@ -187,8 +188,7 @@ class NDList<X> {
             shape[3],
             (l) => List.generate(
               shape[4],
-              (m) =>
-                  flatList[getLinearIndex(shape.sublist(1), [i, j, k, l, m])],
+              (m) => flatList[getLinearIndex(shape, [i, j, k, l, m])],
               // (m) => flatList[i * shape[1] * shape[2] * shape[3] * shape[4] +
               //     j * shape[2] * shape[3] * shape[4] +
               //     k * shape[3] * shape[4] +
@@ -419,13 +419,13 @@ class NDList<X> {
 
   /// Returns the expected result from any accepted index, as well as the indices on _list that correspond to its elements.
   NDIndexResult<X> _compoundIndexWithEnumeration(List<int> shape, index) {
-    NDIndexResult<X> priorResult = NDIndexResult.from(this);
+    NDIndexResult<X> thisAsResult = NDIndexResult.from(this);
     if (index is List) {
-      return _listIndex<X>(priorResult, index);
+      return _listIndex<X>(thisAsResult, index);
     } else if (index is int) {
-      return _intIndex(priorResult, index);
+      return _intIndex(thisAsResult, index);
     } else if (index is String) {
-      return _stringIndex(priorResult, index, 0);
+      return _stringIndex(thisAsResult, index, 0);
     } else {
       throw ArgumentError('Invalid index');
     }
@@ -433,6 +433,7 @@ class NDList<X> {
 
   static NDIndexResult<Y> _stringIndex<Y>(
       NDIndexResult<Y> priorResult, String index, int axis) {
+    // TODO: remove print
     print('string index: "$index"');
     try {
       // is it just an int in string format?
@@ -452,12 +453,15 @@ class NDList<X> {
   /// This method is used to index the NDList with a list of valid indices, i.e. ints and formatted slice strings.
   static NDIndexResult<X> _listIndex<X>(
       NDIndexResult<X> priorResult, List index) {
+    // TODO: remove print
     print('list index: $index');
     for (var i = 0; i < index.length; i++) {
       if (index[i] is String) {
+        // TODO: remove print
         print('string index: "${index[i]}"');
         priorResult = _stringIndex(priorResult, index[i], i);
       } else if (index[i] is int) {
+        // TODO: remove print
         print("int index: ${index[i]}");
         priorResult = _intIndexWithAxis(priorResult, index[i], i);
       } else {
@@ -470,6 +474,7 @@ class NDList<X> {
 
   static NDIndexResult<X> _intIndex<X>(
       NDIndexResult<X> priorResult, int index) {
+    // TODO: remove print
     print('int index: $index');
     if (priorResult.shape.isEmpty) {
       throw ArgumentError('Cannot index an empty NDList');
@@ -498,6 +503,7 @@ class NDList<X> {
   /// This builds on the base case of an axis-0 int index, and allows for indexing on any axis.
   static NDIndexResult<X> _intIndexWithAxis<X>(
       NDIndexResult<X> priorResult, int index, int axis) {
+    // TODO: remove print
     print('int index with axis: $index, axis $axis');
     return _slice(priorResult, index, index + 1, axis: axis);
   }
@@ -509,6 +515,7 @@ class NDList<X> {
   static NDIndexResult<Y> _slice<Y>(
       NDIndexResult<Y> priorResult, int start, int end,
       {required int axis}) {
+    // TODO: uncomment and fix, test
     // if (start < 0) {
     //   start += priorResult.shape[axis];
     // }
