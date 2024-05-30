@@ -45,9 +45,6 @@ class NDIndexResult<X> {
   ///
   /// We got `this` from an index, so it references a subtensor of `parent`. When we do the next step in the index, we are putting that index on the subtensor. This method resolves the indices on the subtensor to the indices on the parent tensor.
   NDIndexResult<X> resolveStep(List<int> subtensorIndices, List<int> newShape) {
-    // TODO: remove print
-    print("Resolving step: new shape $newShape");
-    print("finding indices: $subtensorIndices from $parentIndices");
     final newParentIndices = [for (int i in subtensorIndices) parentIndices[i]];
     return NDIndexResult(parent, newParentIndices, newShape);
   }
@@ -526,7 +523,7 @@ class NDList<X> {
     //   return _slice(priorResult, end, start, axis: axis);
     // }
     if (end == start) {
-      return priorResult.resolveStep([], []);
+      return priorResult.resolveStep([], [0]);
     }
 
     if (axis > 0 && priorResult.shape.contains(1)) {
