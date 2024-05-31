@@ -1,9 +1,82 @@
-import 'dart:math';
-
 import 'package:nd_list/nd_list.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('NDIndexResult', () {
+    test('Test resolving', () {
+      final data = [1.0, 2.0, 3.0, 4.0];
+      final ndList = NDList.from<double>(data);
+
+      final result = NDIndexResult.from(ndList);
+      final result2 = result.resolveStep([1, 2, 3], [3]);
+      expect(result2.evaluate(), equals(NDList.from<double>([2.0, 3.0, 4.0])));
+      expect(result2.parentIndices, [1, 2, 3]);
+      expect(result2.parent, equals(ndList));
+      expect(result2.shape, equals([3]));
+
+      final result3 = result2.resolveStep([1, 2], [2]);
+      expect(result3.parentIndices, equals([2, 3]));
+      expect(result3.parent, equals(ndList));
+      expect(result3.shape, equals([2]));
+      expect(result3.evaluate(), equals(NDList.from<double>([3.0, 4.0])));
+    });
+
+    test('Resolving 3D', () {
+      final ndList = NumNDList.zeros([2, 3, 4]);
+
+      final result = NDIndexResult.from(ndList);
+      // manually set the indices for slice [:, 1]
+      // NOTE! Comments are in here intentionally,
+      //  it helps keep track of the indices
+      final sliceIndex = [
+        // [
+        //  0, 1, 2, 3,
+        4, 5, 6, 7,
+        //  8, 9, 10, 11,
+        // ], [
+        // ]
+        //  12, 13, 14, 15,
+        16, 17, 18, 19
+        //  20, 21, 22, 23,
+      ];
+
+      final result2 = result.resolveStep(sliceIndex, [2, 4]);
+      expect(result2.parentIndices, sliceIndex);
+      expect(result2.parent, equals(ndList));
+      expect(result2.shape, equals([2, 4]));
+
+      final subSlice = [1, 5]; // => [5, 17] aka [:, 1, 1]
+      final result3 = result2.resolveStep(subSlice, [2, 1]);
+      expect(result3.parentIndices, equals([5, 17]));
+      expect(result3.parent, equals(ndList));
+      expect(result3.shape, equals([2, 1]));
+    });
+
+    test('Evaluate 3D from resolve', () {
+      final ndList = NumNDList.zeros<double>([2, 3, 4]);
+
+      final result = NDIndexResult.from(ndList);
+
+      final valuesAdded = <double>[];
+      for (int i = 0; i < ndList.shape[0]; i++) {
+        for (int j = 0; j < ndList.shape[1]; j++) {
+          for (int k = 0; k < ndList.shape[2]; k++) {
+            final newValue = i * 100.0 + j * 10 + k;
+            ndList[[i, j, k]] = newValue;
+            valuesAdded.add(newValue);
+          }
+        }
+      }
+
+      final result2 = result.resolveStep(range(6), [2, 3]);
+      final ndResult = result2.evaluate();
+
+      expect(ndResult.shape, equals([2, 3]));
+      expect(ndResult.flatten(),
+          equals(NDList.from<double>(valuesAdded.sublist(0, 6))));
+    });
+  });
+
   group('NDList []=', () {
     test('Test can assign 1 element of a 1d NDList', () {
       final data = [1.0, 2.0, 3.0, 4.0];
@@ -17,6 +90,9 @@ void main() {
 
       ndList[-1] = 7.0;
       expect(ndList[3].item!, equals(7.0));
+
+      expect(ndList, NDList.from<double>([5.0, 6.0, 3.0, 7.0]));
+      print(ndList);
     });
     test('Test can assign a slice of a 1d NDList', () {
       final data = [1.0, 2.0, 3.0, 4.0];
@@ -38,7 +114,7 @@ void main() {
       final editToBe = NDList.from<double>([5.0, 6.0, 7.0]);
       ndList[0] = editToBe;
 
-      expect(ndList[0], equals(editToBe));
+      expect(ndList[0], equals(editToBe.reshape([1, 3])));
     });
     test('Test can assign an axis-0 slice of a 2d NDList', () {
       final data = [
@@ -53,10 +129,10 @@ void main() {
 
       ndList['1:3'] = editSlice;
 
-      expect(ndList[0], equals(NDList.from<double>(data[0])));
+      expect(ndList[0].flatten(), equals(NDList.from<double>(data[0])));
       expect(ndList[1], equals(editSlice[0]));
       expect(ndList[2], equals(editSlice[1]));
-      expect(ndList[3], equals(NDList.from<double>(data[3])));
+      expect(ndList[3].flatten(), equals(NDList.from<double>(data[3])));
     });
     test('Test can assign an axis-1 element of a 2d NDList', () {
       final data = [
@@ -73,12 +149,98 @@ void main() {
       ndList[[':', 1]] = editSlice;
 
       for (int row = 0; row < ndList.shape[0]; row++) {
-        expect(ndList[row][0].item, equals(data[row][0]),
+        expect(ndList[[row, 0]].item, equals(data[row][0]),
             reason: "Element 0 of row $row should not have changed");
-        expect(ndList[row][1].item, equals(fillValue),
+        expect(ndList[[row, 1]].item, equals(fillValue),
             reason: "Element 1 of row $row should have been set to $fillValue");
-        expect(ndList[row][2].item, equals(data[row][2]),
+        expect(ndList[[row, 2]].item, equals(data[row][2]),
             reason: "Element 2 of row $row should not have changed");
+      }
+    });
+
+    test('Test can assign axis-1 slice of a 2d NDList<double> with 0d (double)',
+        () {
+      final data = [
+        [0.0, 1.0, 2.0],
+        [3.0, 4.0, 5.0],
+        [6.0, 7.0, 8.0],
+        [9.0, 10.0, 11.0]
+      ];
+
+      final ndData = NDList.from<double>(data);
+
+      ndData[[':', '1:']] = 99.0;
+      for (int i = 0; i < ndData.shape[0]; i++) {
+        expect(ndData[[i, 0]].item, equals(data[i][0]));
+        expect(ndData[[i, 1]].item, equals(99.0));
+        expect(ndData[[i, 2]].item, equals(99.0));
+      }
+    });
+
+    test('Test can assign axis-0 slice of a 2d NDList with 1d data', () {
+      final data = [
+        [0.0, 1.0, 2.0],
+        [3.0, 4.0, 5.0],
+        [6.0, 7.0, 8.0],
+        [9.0, 10.0, 11.0]
+      ];
+
+      final ndData = NDList.from<double>(data);
+
+      ndData[['3:']] = NDList.filled([3], 99.0);
+      for (int i = 0; i < ndData.shape[1]; i++) {
+        expect(ndData[[0, i]].item, data[0][i]);
+        expect(ndData[[1, i]].item, data[1][i]);
+        expect(ndData[[2, i]].item, data[2][i]);
+        expect(ndData[[3, i]].item, 99);
+      }
+    });
+
+    test('Test can assign axis-1 slice of a 2d NDList with 1d data', () {
+      final data = [
+        [0.0, 1.0, 2.0],
+        [3.0, 4.0, 5.0],
+        [6.0, 7.0, 8.0],
+        [9.0, 10.0, 11.0]
+      ];
+
+      final ndData = NDList.from<double>(data);
+
+      ndData[[':', '2:']] = NDList.filled([4], 99.0);
+      for (int i = 0; i < ndData.shape[0]; i++) {
+        expect(ndData[[i, 0]].item, equals(data[i][0]));
+        expect(ndData[[i, 1]].item, equals(data[i][1]));
+        expect(ndData[[i, 2]].item, equals(99.0));
+      }
+      ndData[[':', '1:2']] = NDList.filled([4, 1], 111.0);
+      for (int i = 0; i < ndData.shape[0]; i++) {
+        expect(ndData[[i, 0]].item, equals(data[i][0]));
+        expect(ndData[[i, 1]].item, equals(111.0));
+        expect(ndData[[i, 2]].item, equals(99.0));
+      }
+      ndData[[':', ':1']] = NDList.filled([4, 1], -888.0);
+      for (int i = 0; i < ndData.shape[0]; i++) {
+        expect(ndData[[i, 0]].item, equals(-888.0));
+        expect(ndData[[i, 1]].item, equals(111.0));
+        expect(ndData[[i, 2]].item, equals(99.0));
+      }
+    });
+
+    test('Test can assign axis-1 slice of a 2d NDList with 2d data', () {
+      final data = [
+        [0.0, 1.0, 2.0],
+        [3.0, 4.0, 5.0],
+        [6.0, 7.0, 8.0],
+        [9.0, 10.0, 11.0]
+      ];
+
+      final ndData = NDList.from<double>(data);
+
+      ndData[[':', '1:']] = NDList.filled([4, 2], 99.0);
+      for (int i = 0; i < ndData.shape[0]; i++) {
+        expect(ndData[[i, 0]].item, equals(data[i][0]));
+        expect(ndData[[i, 1]].item, equals(99.0));
+        expect(ndData[[i, 2]].item, equals(99.0));
       }
     });
   });
@@ -125,8 +287,10 @@ void main() {
 
       for (var i = 0; i < nRows; i++) {
         for (var j = 0; j < nCols; j++) {
-          // NOTE! This is a 1x1 NDList; the element _happens_ to be an NDList with shape [4], but it's not correct to think of ndOfNDs[[i, j]] as the same as it's only element. This is a more complicated example of the Dart difference between 1, [1], and NDList.from<int>([1]).
-          expect(ndOfNDs[[i, j]].shape, equals([1]));
+          // NOTE! This is a 1x1 NDList<NDList<double>>;
+          // the element _happens_ to be an NDList with shape [4], but it's not correct to think of ndOfNDs[[i, j]] as the same as it's only element.
+          // This is a more complicated example of the Dart difference between 1, [1], and NDList.from<int>([1]).
+          expect(ndOfNDs[[i, j]].shape, equals([1, 1]));
 
           // since ndOfNDs[[i, j]] has shape [1], we can use .item to get its contents.
           // this is the [4]-shaped NDList `filler`
@@ -138,9 +302,45 @@ void main() {
 
       expect(cemented.shape, equals([nRows, nCols, 4]));
     });
+    test('Test .cement() for 1x1s', () {
+      final data = [
+        [1.0, 2.0, 4.0],
+        [3.0, 4.0, 16.0]
+      ];
+      final ndList = NDList.from<double>(data);
+
+      final subNDs = <NDList<double>>[];
+      for (int i = 0; i < data.length; i++) {
+        for (int j = 0; j < data[i].length; j++) {
+          subNDs.add(NDList.from<double>([data[i][j]]));
+        }
+      }
+
+      final ndOfNDs = NDList.from<NDList<double>>(subNDs);
+
+      expect(ndOfNDs.shape, equals([data.length * data[0].length]));
+
+      final cemented = ndOfNDs.reshape([2, 3]).cemented();
+
+      // note: this works a little strangely for a cement of 1x1s
+      expect(cemented.shape, equals([2, 3, 1]));
+      expect(cemented.reshape([2, 3]), equals(ndList));
+    });
+
+    test('Test .cement() for 1x2s', () {
+      final ndLists = [
+        for (int i = 0; i < 3 * 2; i++) NDList.from<double>([1.0, 2.0])
+      ];
+
+      final ndOfNDs = NDList.from<NDList<double>>(ndLists);
+
+      final cemented = ndOfNDs.reshape([3, 2]).cemented();
+
+      expect(cemented.shape, equals([3, 2, 2]));
+    });
   });
 
-  group('NDList<double> indexing', () {
+  group('Basic operators', () {
     test('==', () {
       final data = [
         [1.0, 2.0],
@@ -158,7 +358,23 @@ void main() {
       // and do not equal others
       expect(ndList0 == ndList, isFalse);
     });
-
+  });
+  group('NDList<double> indexing', () {
+    /// How does shape change on indexing?
+    ///
+    /// dim = 1, shape (n, )
+    /// arr[i] shape (1, )
+    ///
+    /// dim = 2, shape (n, m)
+    /// arr[i] shape (1, m)
+    /// arr[:, j] shape (n, 1)
+    ///
+    /// dim = 3, shape (n, m, p)
+    /// arr[i] shape (1, m, p)
+    /// arr[:, j] shape (n, 1, p)
+    /// arr[:, :, k] shape (n, m, 1)
+    ///
+    ///
     test('1d Indexing with int', () {
       final data = [91.0, 92.0, 94.0];
       final ndList = NDList.from<double>(data);
@@ -170,16 +386,49 @@ void main() {
       }
     });
 
+    test('Shape of axis-j index, j=0,1,2 : 3D', () {
+      final array = NumNDList.zeros<double>([3, 4, 2]);
+
+      for (var i = 0; i < array.shape[0]; i++) {
+        final slice = array[i];
+        expect(slice.shape, equals([1, 4, 2]));
+      }
+
+      for (var i = 0; i < array.shape[1]; i++) {
+        final slice = array[[':', i]];
+        expect(slice.shape, equals([3, 1, 2]));
+      }
+
+      for (var i = 0; i < array.shape[2]; i++) {
+        final slice = array.slice(i, i + 1, axis: 2);
+        expect(slice.shape, equals([3, 4, 1]));
+      }
+    });
+    test('Shape of axis-j index, j=0,1 : 2D', () {
+      final array = NumNDList.zeros<double>([3, 4]);
+
+      for (var i = 0; i < 3; i++) {
+        final slice = array[i];
+        expect(slice.shape, equals([1, 4]));
+      }
+
+      for (var i = 0; i < 4; i++) {
+        final slice = array[[':', i]];
+        expect(slice.shape, equals([3, 1]));
+      }
+    });
+
     test('2d Indexing with int, axis 0', () {
       final data = [
         [1.0, 2.0, 4.0],
         [3.0, 4.0, 16.0]
       ];
       final ndList = NDList.from<double>(data);
-      final ndList0 = NDList.from<double>(data[0]);
+      final ndList0 = NDList.from<double>([data[0]]);
 
       expect(ndList[0], equals(ndList0));
     });
+
     test('2d Indexing with int, axis 1', () {
       final data = [
         [0.0, 1.0, 2.0],
@@ -211,6 +460,7 @@ void main() {
 
       for (int i = 0; i < 2; i++) {
         for (var j = 0; j < 3; j++) {
+          print(ndList[[i, j]]);
           expect(ndList[[i, j]].item, equals(data[i][j]));
         }
       }
@@ -268,27 +518,23 @@ void main() {
 
       // 1d data
       final length0 = data[0].length;
-      final ndList0 = NDList.from<double>(data[0]);
-      expect(ndList0.shape, equals([length0]));
+      final ndList0 = NDList.from<double>([data[0]]);
+      expect(ndList0.shape, equals([1, length0]));
       expect(ndList[0], equals(ndList0));
-      expect(ndList0[0].item, equals(data[0][0]));
-      expect(ndList0[1].item, equals(data[0][1]));
-      expect(ndList[0][0].item, equals(data[0][0]));
-      expect(ndList[0][1].item, equals(data[0][1]));
+      expect(ndList0[[0, 0]].item, equals(data[0][0]));
+      expect(ndList0[[0, 1]].item, equals(data[0][1]));
+      expect(ndList[[0, 0]].item, equals(data[0][0]));
+      expect(ndList[[0, 1]].item, equals(data[0][1]));
 
-      final ndList1 = NDList.from<double>(data[1]);
-      expect(ndList[1], equals(ndList1));
-      expect(ndList1[0].item, equals(data[1][0]));
-      expect(ndList1[1].item, equals(data[1][1]));
-      expect(ndList[1][0].item, equals(data[1][0]));
-      expect(ndList[1][1].item, equals(data[1][1]));
-
-      // trivially 2-dim [1, N]
-      final ndList0Wrapped = NDList.from<double>([data[0]]);
-      expect(ndList0Wrapped.shape, equals([1, length0]));
-      expect(ndList0Wrapped[0], equals(ndList0));
-      expect(ndList0Wrapped[0][0].item, equals(1.0));
-      expect(ndList0Wrapped[0][1].item, equals(2.0));
+      // 1d data
+      final length1 = data[1].length;
+      final ndList1 = NDList.from<double>([data[0]]);
+      expect(ndList1.shape, equals([1, length1]));
+      expect(ndList[0], equals(ndList1));
+      expect(ndList1[[0, 0]].item, equals(data[0][0]));
+      expect(ndList1[[0, 1]].item, equals(data[0][1]));
+      expect(ndList[[0, 0]].item, equals(data[0][0]));
+      expect(ndList[[0, 1]].item, equals(data[0][1]));
     });
 
     test('zeros: 2D', () {
@@ -297,9 +543,9 @@ void main() {
 
       expect(ndList.shape, equals(shape));
       for (var i = 0; i < shape[0]; i++) {
-        expect(ndList[i].shape, equals([2]));
+        expect(ndList[i].shape, equals([1, 2]));
         for (var j = 0; j < shape[1]; j++) {
-          expect(ndList[i][j].item, equals(0.0));
+          expect(ndList[[i, j]].item, equals(0.0));
         }
       }
     });
@@ -337,9 +583,36 @@ void main() {
 
       for (var i = 0; i < 2; i++) {
         for (var j = 0; j < 3; j++) {
-          expect(zerosLike2x3[i][j].item, equals(0.0));
+          expect(zerosLike2x3[[i, j]].item, equals(0.0));
         }
       }
+    });
+  });
+
+  group('Slicing tests', () {
+    test('2d slice length 1, axis 1', () {
+      final data = [
+        [0.0, 1.0, 2.0],
+        [3.0, 4.0, 5.0],
+        [6.0, 7.0, 8.0],
+        [9.0, 10.0, 11.0]
+      ];
+
+      final ndList = NDList.from<double>(data);
+
+      final ndList1 = ndList.slice(1, 2, axis: 1);
+
+      final expectedData = [
+        [1.0],
+        [4.0],
+        [7.0],
+        [10.0]
+      ];
+      final expectedSlice = NDList.from<double>(expectedData);
+
+      expect(ndList1.shape, equals(expectedSlice.shape));
+
+      expect(ndList1, equals(expectedSlice));
     });
 
     test('Slicing once along axis 0, both end points given', () {
@@ -395,20 +668,24 @@ void main() {
       final axis0Slice = testND[[':1', ':', ':']];
       expect(axis0Slice.shape, equals([1, 4, 3]), reason: 'axis 0 slice shape');
 
-      // axis 1
-      final axis1Slice = testND[[':', ':1', ':']];
-      expect(axis1Slice.shape, equals([2, 1, 3]), reason: 'axis 1 slice shape');
+      // // axis 1
+      final axis1Slice = testND[[':', ':1']];
+      expect(axis1Slice.shape, equals([2, 1, 3]),
+          reason: 'axis 1 slice shape, start-axis slice');
+      final testSlice2 = testND[[':2', ':1']]; // redundant :2, equiv to above
+      expect(testSlice2.shape, equals([2, 1, 3]),
+          reason: 'axis 1 slice shape, redundant :2');
+      final testSlice = testND[[':', '1:3']];
+      expect(testSlice.shape, equals([2, 2, 3]),
+          reason: 'axis 1 slice shape, mid-axis slice');
 
       // axis 2
       final axis2Slice = testND[[':', ':', ':1']];
-      expect(axis2Slice.shape, equals([2, 4, 1]), reason: 'axis 2 slice shape');
-
-      // final testSlice = testND[[':', '1:3']];
-      // expect(testSlice.shape, equals([2, 2, 3]));
-      // final testSlice2 = testND[[':2', ':1']];
-      // expect(testSlice2.shape, equals([2, 1, 3]));
-      // final iteratedSlice = testSlice[[':', ':', ':1']];
-      // expect(iteratedSlice.shape, equals([2, 2, 1]));
+      expect(axis2Slice.shape, equals([2, 4, 1]),
+          reason: 'axis 2 slice shape, start-axis slice');
+      final iteratedSlice = testSlice[[':', ':', '1:3']];
+      expect(iteratedSlice.shape, equals([2, 2, 2]),
+          reason: 'axis 2 slice shape, mid-axis slice');
     });
 
     test('Slicing once along axis 1', () {
@@ -443,6 +720,110 @@ void main() {
           reason: 'explicit slice has wrong data');
     });
 
+    // if (start == end) {...}
+    test('start == end (Empty slice)', () {
+      // 1 d
+      final nd1d = NDList.from<double>([1.0, 2.0, 3.0, 4.0]);
+      for (int i = 0; i < nd1d.shape[0]; i++) {
+        final empty1d = nd1d.slice(i, i);
+        expect(empty1d.count, 0);
+        expect(empty1d.shape, [0]);
+      }
+
+      // 2 d
+      final nd2d = NDList.from<double>([
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0]
+      ]);
+
+      for (int axis = 0; axis < nd2d.nDims; axis++) {
+        for (int i = 0; i < nd2d.shape[axis]; i++) {
+          final slice = nd2d.slice(i, i, axis: axis);
+          expect(slice.count, 0);
+          expect(slice.shape, [0]);
+        }
+      }
+
+      // 3 d
+      final nd3d = NumNDList.zeros<double>([2, 3, 4]);
+
+      for (int axis = 0; axis < nd3d.nDims; axis++) {
+        for (int i = 0; i < nd3d.shape[axis]; i++) {
+          final slice = nd3d.slice(i, i, axis: axis);
+          expect(slice.count, 0);
+          expect(slice.shape, [0]);
+        }
+      }
+    });
+
+    // if (axis > 0 && priorResult.shape.contains(1)) {...}
+    test('axis > 0 && priorResult.shape[0] == 1', () {
+      final ndList = NumNDList.zeros([1, 2, 3]);
+
+      final sliceAxis1 = ndList.slice(0, 1, axis: 1);
+      final sliceAxis2 = ndList.slice(0, 1, axis: 2);
+
+      expect(sliceAxis1.shape, equals([1, 1, 3]),
+          reason: "Axis 1 slice has the wrong shape");
+      expect(sliceAxis2.shape, equals([1, 2, 1]),
+          reason: "Axis 2 slice has the wrong shape");
+    });
+
+    test('axis > 0 && priorResult.shape[1] == 1', () {
+      final ndList = NumNDList.zeros([2, 1, 3]);
+
+      final sliceAxis1 = ndList.slice(0, 1, axis: 1);
+      final sliceAxis2 = ndList.slice(0, 1, axis: 2);
+
+      expect(sliceAxis1.shape, equals([2, 1, 3]),
+          reason: "Axis 1 slice has the wrong shape");
+      expect(sliceAxis2.shape, equals([2, 1, 1]),
+          reason: "Axis 2 slice has the wrong shape");
+    });
+
+    test('axis > 0 && priorResult.shape[2] == 1', () {
+      final ndList = NumNDList.zeros([2, 3, 1]);
+
+      final sliceAxis1 = ndList.slice(0, 1, axis: 1);
+      final sliceAxis2 = ndList.slice(0, 1, axis: 2);
+
+      expect(sliceAxis1.shape, equals([2, 1, 1]),
+          reason: "Axis 1 slice has the wrong shape");
+      expect(sliceAxis2.shape, equals([2, 3, 1]),
+          reason: "Axis 2 slice has the wrong shape");
+    });
+
+    // if (axis > priorResult.shape.length - 1) {...}
+    test('Axis too large', () {
+      final ndList = NumNDList.zeros([2, 3, 4]);
+
+      expect(() => ndList.slice(0, 1, axis: 3), throwsArgumentError);
+      expect(() => ndList.slice(0, 1, axis: 4), throwsArgumentError);
+    });
+
+    // if (start == 0 && end == shape[axis]) {...}
+    // this is tested elsewhere via full slice tests, but just to do an really thorough check in here.
+    test('Full slice, 3D', () {
+      final ndList = NumNDList.zeros([2, 3, 4]);
+
+      final sliceStrings = <String>[];
+
+      // test we can use full-slice syntax on 3D list, every axis
+      for (var i = 0; i < ndList.nDims; i++) {
+        final fullSlice = ndList.slice(0, ndList.shape[i], axis: i);
+        expect(fullSlice.shape, equals([2, 3, 4]));
+        expect(fullSlice, equals(ndList));
+
+        // [] => [':'] => [':', ':'] => [':', ':', ':']
+        sliceStrings.add(':');
+        final fullSlice2 = ndList[sliceStrings];
+        expect(fullSlice2.shape, equals([2, 3, 4]));
+        expect(fullSlice2, equals(ndList));
+      }
+    });
+  });
+
+  group('Arithmetic', () {
     test('Sum', () {
       final data1 = [
         [1.0, 2.0],
@@ -461,7 +842,7 @@ void main() {
 
       for (var i = 0; i < 2; i++) {
         for (var j = 0; j < 2; j++) {
-          expect(sum[i][j].item, equals(data1[i][j] + data2[i][j]));
+          expect(sum[[i, j]].item, equals(data1[i][j] + data2[i][j]));
         }
       }
     });
@@ -483,48 +864,13 @@ void main() {
 
       for (var i = 0; i < 2; i++) {
         for (var j = 0; j < 2; j++) {
-          expect(sum[i][j].item, equals(data1[i][j] * data2[i][j]));
+          expect(sum[[i, j]].item, equals(data1[i][j] * data2[i][j]));
         }
       }
     });
+  });
 
-    test('Test .cement() for 1x1s', () {
-      final data = [
-        [1.0, 2.0, 4.0],
-        [3.0, 4.0, 16.0]
-      ];
-      final ndList = NDList.from<double>(data);
-
-      final subNDs = <NDList<double>>[];
-      for (int i = 0; i < data.length; i++) {
-        for (int j = 0; j < data[i].length; j++) {
-          subNDs.add(NDList.from<double>([data[i][j]]));
-        }
-      }
-
-      final ndOfNDs = NDList.from<NDList<double>>(subNDs);
-
-      expect(ndOfNDs.shape, equals([data.length * data[0].length]));
-
-      final cemented = ndOfNDs.reshape([2, 3]).cemented();
-
-      // note: this works a little strangely for a cement of 1x1s
-      expect(cemented.shape, equals([2, 3, 1]));
-      expect(cemented.reshape([2, 3]), equals(ndList));
-    });
-
-    test('Test .cement() for 1x2s', () {
-      final ndLists = [
-        for (int i = 0; i < 3 * 2; i++) NDList.from<double>([1.0, 2.0])
-      ];
-
-      final ndOfNDs = NDList.from<NDList<double>>(ndLists);
-
-      final cemented = ndOfNDs.reshape([3, 2]).cemented();
-
-      expect(cemented.shape, equals([3, 2, 2]));
-    });
-
+  group('Test errors', () {
     test('Test int indexing. Throw error only if out of bounds', () {
       final data = [
         [1.0, 2.0, 4.0],
@@ -532,11 +878,11 @@ void main() {
       ];
       final ndList = NDList.from<double>(data);
       // single int input
-      expect(ndList[0], equals(NDList.from<double>(data[0])));
-      expect(ndList[1], equals(NDList.from<double>(data[1])));
+      expect(ndList[0], equals(NDList.from<double>([data[0]])));
+      expect(ndList[1], equals(NDList.from<double>([data[1]])));
       expect(() => ndList[2], throwsRangeError);
-      expect(ndList[-1], equals(NDList.from<double>(data[1])));
-      expect(ndList[-2], equals(NDList.from<double>(data[0])));
+      expect(ndList[-1], equals(NDList.from<double>([data[1]])));
+      expect(ndList[-2], equals(NDList.from<double>([data[0]])));
     });
   });
 }

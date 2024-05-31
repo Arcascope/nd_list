@@ -1,4 +1,15 @@
-import "package:tflite_flutter/tflite_flutter.dart";
+library nd_list;
+
+List<int> unsqueezeShape(List<int> shape, int axis) {
+  if (axis < 0) {
+    axis += shape.length + 1;
+  }
+  return [...shape.sublist(0, axis), 1, ...shape.sublist(axis)];
+}
+
+List<int> squeezeShape(List<int> shape) {
+  return shape.where((element) => element != 1).toList();
+}
 
 int getLinearIndex(List<int> shape, List<int> index) {
   if (shape.length != index.length) {
@@ -16,10 +27,38 @@ int getLinearIndex(List<int> shape, List<int> index) {
   return linearIndex;
 }
 
-typedef EnumeratedSliceResult<X> = (List<int>, NDList<X>);
+List<int> range(int count) {
+  return List.generate(count, (index) => index);
+}
 
-/// Wrapper on multi-dimensional lists to provide easier indexing and slicing.
-/// This class is inspired by NumPy's ndarray.
+/// Provides a lazy index result that can be resolved to a concrete NDList using `.evaluate()`.
+///
+/// This lets us quickly and reliably reduce complex indices to simples pieces, and also lets us build the []= algorithm on top of the [] algorithm.
+class NDIndexResult<X> {
+  NDList<X> parent;
+  List<int> parentIndices;
+  List<int> shape;
+
+  NDIndexResult(this.parent, this.parentIndices, this.shape);
+
+  /// Used when processing an index via intermediate steps.
+  ///
+  /// We got `this` from an index, so it references a subtensor of `parent`. When we do the next step in the index, we are putting that index on the subtensor. This method resolves the indices on the subtensor to the indices on the parent tensor.
+  NDIndexResult<X> resolveStep(List<int> subtensorIndices, List<int> newShape) {
+    final newParentIndices = [for (int i in subtensorIndices) parentIndices[i]];
+    return NDIndexResult(parent, newParentIndices, newShape);
+  }
+
+  NDList<X> evaluate() {
+    return NDList._([for (int i in parentIndices) parent._list[i]], shape);
+  }
+
+  static NDIndexResult<Y> from<Y>(NDList<Y> ndList) {
+    return NDIndexResult(ndList, range(ndList.count), ndList.shape);
+  }
+}
+
+/// Gives a strongly typed multidimensional list which can be sliced, indexed, and reshaped. The API is inspired by NumPy's ndarray. We implement lazy indexing to facilitate composition and code re-use, as well as speed for complex operations.
 ///
 /// Example:
 /// ```dart
@@ -28,7 +67,7 @@ typedef EnumeratedSliceResult<X> = (List<int>, NDList<X>);
 /// [4.0, 5.0, 6.0],
 /// [7.0, 8.0, 9.0]
 /// ];
-/// final ndList = NDList.from<double>(data);
+/// final NDList<double> ndList = NDList.from<double>(data);
 ///
 /// final sliced = ndList[['1:3', '0:2']];
 /// ```
@@ -39,22 +78,131 @@ class NDList<X> {
   final List<int> _shape = [];
 
   List toIteratedList() {
-    return _list.reshape(shape);
+    // Note! Originally from tflite_flutter's ListShape extension.
+    // Since this is the only method using tflite_flutter, and we are both using Apache 2.0, I have copied the code here. All rights to the original author(s).
+    // return _list.reshape(shape);
+
+    var dims = shape.length;
+    var numElements = 1;
+    for (var i = 0; i < dims; i++) {
+      numElements *= shape[i];
+    }
+
+    if (numElements != count) {
+      throw ArgumentError(
+          'Total elements mismatch expected: $numElements elements for shape: $shape but found $count');
+    }
+
+    if (dims <= 5) {
+      switch (dims) {
+        case 2:
+          return _reshape2(shape);
+        case 3:
+          return _reshape3(shape);
+        case 4:
+          return _reshape4(shape);
+        case 5:
+          return _reshape5(shape);
+      }
+    }
+
+    var reshapedList = _list as List;
+    for (var i = dims - 1; i > 0; i--) {
+      var temp = [];
+      for (var start = 0;
+          start + shape[i] <= reshapedList.length;
+          start += shape[i]) {
+        temp.add(reshapedList.sublist(start, start + shape[i]));
+      }
+      reshapedList = temp;
+    }
+    return reshapedList;
+  }
+
+  List<List<X>> _reshape2(List<int> shape) {
+    var flatList = _list;
+    List<List<X>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => flatList[i * shape[1] + j],
+      ),
+    );
+
+    return reshapedList;
+  }
+
+  List<List<List<T>>> _reshape3<T>(List<int> shape) {
+    var flatList = _list as List;
+    List<List<List<T>>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => List.generate(
+          shape[2],
+          // (k) => flatList[i * shape[1] * shape[2] + j * shape[2] + k],
+          (k) => flatList[getLinearIndex(shape, [i, j, k])],
+        ),
+      ),
+    );
+
+    return reshapedList;
+  }
+
+  List<List<List<List<T>>>> _reshape4<T>(List<int> shape) {
+    var flatList = _list as List;
+
+    List<List<List<List<T>>>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => List.generate(
+          shape[2],
+          (k) => List.generate(
+            shape[3],
+            (l) => flatList[getLinearIndex(shape, [i, j, k, l])],
+            // (l) => flatList[i * shape[1] * shape[2] * shape[3] +
+            //     j * shape[2] * shape[3] +
+            //     k * shape[3] +
+            //     l],
+          ),
+        ),
+      ),
+    );
+
+    return reshapedList;
+  }
+
+  List<List<List<List<List<T>>>>> _reshape5<T>(List<int> shape) {
+    var flatList = _list as List;
+    List<List<List<List<List<T>>>>> reshapedList = List.generate(
+      shape[0],
+      (i) => List.generate(
+        shape[1],
+        (j) => List.generate(
+          shape[2],
+          (k) => List.generate(
+            shape[3],
+            (l) => List.generate(
+              shape[4],
+              (m) => flatList[getLinearIndex(shape, [i, j, k, l, m])],
+              // (m) => flatList[i * shape[1] * shape[2] * shape[3] * shape[4] +
+              //     j * shape[2] * shape[3] * shape[4] +
+              //     k * shape[3] * shape[4] +
+              //     l * shape[4] +
+              //     m],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return reshapedList;
   }
 
   @override
   String toString() {
     return toIteratedList().toString();
-    // // pretty print the array
-    // if (_shape.isEmpty) {
-    //   return '[]';
-    // }
-    // if (_shape.length == 1) {
-    //   return _list.toString();
-    // }
-    // return '[${[
-    //   for (var i = 0; i < _shape[0]; i++) this[i].toString()
-    // ].join('\n ')}]\n';
   }
 
   NDList.empty() {
@@ -83,7 +231,6 @@ class NDList<X> {
         throw ArgumentError(
             'Ragged array detected! First ragged index: $raggedElementIndex, which has ${list[raggedElementIndex].length} elements, but the 0th element has ${list[0].length}');
       }
-      // shape.insert(0, list[0].length);
       shape.add(list[0].length);
       list = list.expand((element) => element).toList();
     }
@@ -145,7 +292,7 @@ class NDList<X> {
     return NDList._(_list.map(f).toList(), _shape);
   }
 
-  (int, int)? _parseSlice(String slice) {
+  static (int, int?)? _parseSlice(String slice) {
     try {
       if (slice.isEmpty) {
         return (0, 0);
@@ -155,7 +302,7 @@ class NDList<X> {
       // ':2' => parts == ['', '2'] => start = 0, end = 2
       final parts = slice.split(':');
       final start = parts[0].isEmpty ? 0 : int.parse(parts[0]);
-      final end = parts[1].isEmpty ? _shape[0] : int.parse(parts[1]);
+      final end = parts[1].isEmpty ? null : int.parse(parts[1]);
       return (start, end);
     } catch (e) {
       return null;
@@ -163,7 +310,10 @@ class NDList<X> {
   }
 
   NDList<X> operator [](index) {
-    return _compoundIndexWithEnumeration(index).$2;
+    if (_list.isEmpty) {
+      throw ArgumentError('Empty NDList, cannot index.');
+    }
+    return _compoundIndexWithEnumeration(shape, index).evaluate();
   }
 
   void operator []=(index, value) {
@@ -186,9 +336,10 @@ class NDList<X> {
     // this gives a subtensor whose elements can be modified
     // and are the same objects as in this._list
     // So, when we edit elements of this sub-tensor we are modifying the original too.
-    final indicesAndSliceToEdit = this._compoundIndexWithEnumeration(index);
-    final sliceToEdit = indicesAndSliceToEdit.$2;
-    final editIndices = indicesAndSliceToEdit.$1;
+    final indicesAndSliceToEdit =
+        this._compoundIndexWithEnumeration(shape, index);
+    final editIndices = indicesAndSliceToEdit.parentIndices;
+    final sliceToEdit = indicesAndSliceToEdit.evaluate();
     final paddedValueShape =
         _padShape(shape: value.shape, toMatch: sliceToEdit.shape);
     value = value.reshape(paddedValueShape);
@@ -200,7 +351,7 @@ class NDList<X> {
 
     // now, we can iterate over the elements of the value and assign them to the slice
     final repeatedValue = NDList.filled(sizeDivisor, value).cemented();
-    for (var i = 0; i < repeatedValue.count; i++) {
+    for (var i = 0; i < editIndices.length; i++) {
       _list[editIndices[i]] = repeatedValue._list[i];
     }
   }
@@ -264,26 +415,27 @@ class NDList<X> {
   }
 
   /// Returns the expected result from any accepted index, as well as the indices on _list that correspond to its elements.
-  EnumeratedSliceResult<X> _compoundIndexWithEnumeration(index) {
-    if (_list.isEmpty) {
-      throw ArgumentError('Empty NDList, cannot index.');
-    }
+  NDIndexResult<X> _compoundIndexWithEnumeration(List<int> shape, index) {
+    NDIndexResult<X> thisAsResult = NDIndexResult.from(this);
     if (index is List) {
-      return _listIndex(index);
+      return _listIndex<X>(thisAsResult, index);
     } else if (index is int) {
-      return _intIndex(index);
+      return _intIndex(thisAsResult, index);
     } else if (index is String) {
-      return _stringIndex(index, 0);
+      return _stringIndex(thisAsResult, index, 0);
     } else {
       throw ArgumentError('Invalid index');
     }
   }
 
-  EnumeratedSliceResult<X> _stringIndex(String index, int axis) {
+  static NDIndexResult<Y> _stringIndex<Y>(
+      NDIndexResult<Y> priorResult, String index, int axis) {
+    // TODO: remove print
+    print('string index: "$index"');
     try {
       // is it just an int in string format?
       // .parse throws if cannot be parsed as an int
-      return this._intIndexWithAxis(int.parse(index), axis);
+      return _intIndexWithAxis(priorResult, int.parse(index), axis);
     } catch (e) {
       // just move on, it's not an int
     }
@@ -291,171 +443,145 @@ class NDList<X> {
     if (parsed == null) {
       throw ArgumentError('Invalid slice');
     }
-    return this._slice(parsed.$1, parsed.$2, axis: axis);
+    return _slice(priorResult, parsed.$1, parsed.$2 ?? priorResult.shape[axis],
+        axis: axis);
   }
 
   /// This method is used to index the NDList with a list of valid indices, i.e. ints and formatted slice strings.
-  EnumeratedSliceResult<X> _listIndex(List index) {
-    if (index.length == 1 && index[0] is int) {
-      return this._intIndex(index[0]);
-    } else if (index.length == 1 && index[0] is String) {
-      return this._stringIndex(index[0], 0);
-    }
-    var _listIndex = <int>[];
-    var sliced = this;
-    late EnumeratedSliceResult<X> nextSlicing;
+  static NDIndexResult<X> _listIndex<X>(
+      NDIndexResult<X> priorResult, List index) {
+    // TODO: remove print
+    print('list index: $index');
     for (var i = 0; i < index.length; i++) {
       if (index[i] is String) {
-        print("string index: ${index[i]}");
-        nextSlicing = sliced._stringIndex(index[i], i);
+        // TODO: remove print
+        print('string index: "${index[i]}"');
+        priorResult = _stringIndex(priorResult, index[i], i);
       } else if (index[i] is int) {
+        // TODO: remove print
         print("int index: ${index[i]}");
-        nextSlicing = sliced._intIndexWithAxis(index[i], i);
+        priorResult = _intIndexWithAxis(priorResult, index[i], i);
       } else {
         throw ArgumentError(
             'Invalid index, "${index[i]}" in position $i is not an int or a string.');
       }
-      sliced = nextSlicing.$2;
-      if (_listIndex.isEmpty) {
-        _listIndex = nextSlicing.$1;
-        continue;
-      }
-      _listIndex = [for (int i in nextSlicing.$1) _listIndex[i]];
     }
-    return (_listIndex, sliced);
+    return priorResult;
   }
 
-  EnumeratedSliceResult<X> _intIndex(int index) {
-    if (_shape.isEmpty) {
+  static NDIndexResult<X> _intIndex<X>(
+      NDIndexResult<X> priorResult, int index) {
+    // TODO: remove print
+    print('int index: $index');
+    if (priorResult.shape.isEmpty) {
       throw ArgumentError('Cannot index an empty NDList');
     }
+
     while (index < 0) {
-      // -1 => _shape[0] - 1 (aka last element)
+      // -1 => priorResult.shape[0] - 1 (aka last element)
       // -2 => second last element, etc.
-      index += _shape[0];
+      index += priorResult.shape[0];
     }
     // error handling
-    if (index >= _shape[0]) {
+    if (index >= priorResult.shape[0]) {
       throw RangeError(
-          'Index out of bounds: index $index is out of bounds for axis with size ${_shape[0]}');
+          'Index out of bounds: index $index is out of bounds for axis with size ${priorResult.shape[0]}');
     }
     // return the appropriate axis-0 slice
-    if (_shape.length == 1) {
-      return ([index], NDList._([_list[index]], [1]));
+    if (priorResult.shape.length == 1) {
+      return priorResult.resolveStep([index], [1]);
     }
-    final returnShape = _shape.sublist(1);
+    final returnShape = [1, ...priorResult.shape.sublist(1)];
     final subLength = _product(returnShape);
-    final theSlice = NDList._(
-        _list.sublist(index * subLength, (index + 1) * subLength), returnShape);
-    final _listIndex = List.generate(subLength, (i) => index * subLength + i);
-    return (_listIndex, theSlice);
+    final listIndex = List.generate(subLength, (i) => index * subLength + i);
+    return priorResult.resolveStep(listIndex, returnShape);
   }
 
   /// This builds on the base case of an axis-0 int index, and allows for indexing on any axis.
-  EnumeratedSliceResult<X> _intIndexWithAxis(int index, int axis) {
-    return _slice(index, index + 1, axis: axis);
-    if (_shape.isEmpty) {
-      throw ArgumentError('Cannot index an empty NDList');
-    }
-    if (axis == 0) {
-      return _intIndex(index);
-    }
-    if (axis < 0 || axis >= _shape.length) {
-      throw ArgumentError('Invalid axis $axis for shape $_shape');
-    }
-    final shapeAfter = _shape.sublist(axis + 1);
-    final shapeBefore = _shape.sublist(0, axis);
-    final returnShape = [...shapeBefore, ...shapeAfter];
-
-    // figure out the starting point for our indices
-    final firstIndex = index * _product(shapeAfter);
-
-    // The indices appear in blocks of consecutive values, corresponding to fully enumerating the values between the start and end of a single off-axis slice
-    final sliceStep = _shape[axis] * _product(shapeAfter);
-
-    final singleAxisElements = List.generate(
-        _product(shapeAfter), (innerIdx) => firstIndex + innerIdx);
-    final indicesOnThisList = [
-      for (int i = 0; i < _product(shapeBefore); i++)
-        ...singleAxisElements.map((e) => e + i * sliceStep)
-    ];
-
-    print(indicesOnThisList);
-
-    return (
-      indicesOnThisList,
-      NDList._([for (int i in indicesOnThisList) _list[i]], returnShape)
-    );
+  static NDIndexResult<X> _intIndexWithAxis<X>(
+      NDIndexResult<X> priorResult, int index, int axis) {
+    // TODO: remove print
+    print('int index with axis: $index, axis $axis');
+    return _slice(priorResult, index, index + 1, axis: axis);
   }
 
   NDList<X> slice(int start, int end, {int axis = 0}) {
-    return _slice(start, end, axis: axis).$2;
+    return _slice(NDIndexResult.from(this), start, end, axis: axis).evaluate();
   }
 
-  EnumeratedSliceResult<X> _slice(int start, int end, {int axis = 0}) {
-    if (start < 0) {
-      start += _shape[axis];
-    }
-    if (end < 0) {
-      end += _shape[axis];
-    }
-    if (end < start) {
-      return this._slice(end, start, axis: axis);
-    }
+  static NDIndexResult<Y> _slice<Y>(
+      NDIndexResult<Y> priorResult, int start, int end,
+      {required int axis}) {
+    // TODO: uncomment and fix, test
+    // if (start < 0) {
+    //   start += priorResult.shape[axis];
+    // }
+    // if (end < 0) {
+    //   end += priorResult.shape[axis];
+    // }
+    // if (end < start) {
+    //   return _slice(priorResult, end, start, axis: axis);
+    // }
     if (end == start) {
-      return ([], NDList._([], [0]));
-    }
-    if (_shape.length == 1) {
-      final sliceEnd = end > _shape[0] ? _shape[0] : end;
-      final sliceLength = sliceEnd - start;
-      return (
-        List.generate(sliceLength, (i) => start + i),
-        NDList._(_list.sublist(start, sliceEnd), [sliceLength])
-      );
+      return priorResult.resolveStep([], [0]);
     }
 
-    if (axis > _shape.length - 1) {
+    if (axis > 0 && priorResult.shape.contains(1)) {
+      final indexOf1 = priorResult.shape.indexOf(1);
+      if (indexOf1 == axis) {
+        if (start == 0 && end == 1) {
+          return priorResult;
+        } else {
+          throw ArgumentError(
+              'Cannot slice from $start to $end on axis $axis of an NDList with shape ${priorResult.shape}');
+        }
+      }
+      final reducedShape = [
+        for (var i in range(priorResult.shape.length)) priorResult.shape[i]
+      ];
+      reducedShape.removeAt(indexOf1);
+      final newAxis = (axis > indexOf1) ? axis - 1 : axis;
+      final newPrior = NDIndexResult(
+          priorResult.parent, priorResult.parentIndices, reducedShape);
+      final reducedSlice = _slice(newPrior, start, end, axis: newAxis);
+      reducedSlice.shape.insert(indexOf1, 1);
+      return reducedSlice;
+    }
+    if (axis > priorResult.shape.length - 1) {
       throw ArgumentError(
-          'Invalid axis $axis for ${_shape.length}D list with shape $_shape');
+          'Invalid axis $axis for ${priorResult.shape.length}-D list with shape ${priorResult.shape}');
+    }
+
+    if (start == 0 && end == priorResult.shape[axis]) {
+      return priorResult;
     }
 
     if (axis == 0) {
-      final sliceStep = _product(_shape.sublist(1));
-      final sliceEnd = end > _shape[0] ? _shape[0] : end;
-      final sliceLength = sliceEnd - start;
-      final _listIndices =
-          List.generate(sliceLength * sliceStep, (i) => start * sliceStep + i);
-      return (
-        _listIndices,
-        // we know (_shape.length >= 2) since checked == 1 above
-        NDList._([for (int i in _listIndices) _list[i]],
-            [sliceLength, ..._shape.sublist(1)])
-      );
+      final sliceEnd = end > priorResult.shape[0] ? priorResult.shape[0] : end;
+      // trivial slice
+      var sliceLength = sliceEnd - start;
+      final listIndices = [
+        for (int i = start; i < sliceEnd; i++)
+          ..._intIndex(priorResult, i).parentIndices
+      ];
+
+      final sliceShape = [sliceLength, ...priorResult.shape.sublist(1)];
+      return NDIndexResult(priorResult.parent, listIndices, sliceShape);
     }
 
-    // now, build a NDList<NDList<X>>, where each element has the same shape
-    // Then we will use .cemented() to get an NDList<X> with the expected shape
-    final subtensorIndices = _enumerateSubtensors(axis);
-    final indicesAndSubTensors = subtensorIndices
-        .map((e) => this._compoundIndexWithEnumeration(e))
-        .map((indicesAndSubtensor) {
-      final (indices, subtensor) = indicesAndSubtensor;
-      // The indices we get back here are actually in reference to the subtensor.
-      final (sliceIdx, subSlice) = subtensor._slice(start, end, axis: axis - 1);
-      // To convert these back to indices on `this._list` we now map sliceIdx[i] to indices[slideIdx[i]], since `indices` tells us which `this._list` elements went into the subtensor..
-      final listIndices = sliceIdx.map((i) => indices[i]).toList();
-      return (listIndices, subSlice);
-    }).toList();
+    final axis0 = [
+      for (int i = 0; i < priorResult.shape[0]; i++) _intIndex(priorResult, i)
+    ];
 
-    final subTensors = indicesAndSubTensors.map((e) => e.$2).toList();
-    final indicesOnThisList =
-        indicesAndSubTensors.expand((e) => e.$1).toSet().toList()..sort();
+    final axis0Slices = axis0.map((e) => _slice(e, start, end, axis: axis));
 
-    final shapeBeforeAxis = _shape.sublist(0, axis);
-    return (
-      indicesOnThisList,
-      NDList.from<NDList<X>>(subTensors).reshape(shapeBeforeAxis).cemented()
-    );
+    final resolvedIndices = axis0Slices.expand((e) => e.parentIndices).toList();
+    final resolvedShape = [
+      axis0Slices.length,
+      ...axis0Slices.first.shape.sublist(1)
+    ];
+
+    return NDIndexResult(priorResult.parent, resolvedIndices, resolvedShape);
   }
 
   /// !! (Remember we index the axes from 0.)
@@ -466,7 +592,7 @@ class NDList<X> {
   ///
   /// Suppose `this` has shape [2, 3, 4, 5] and we want to do something on axis 2, which has size 4.
   /// We can view this as an operation to each element of a [2, 3] NDList, where each element is a [4, 5] NDList.
-  List<List<int>> _enumerateSubtensors(int belowAxis) {
+  static List<List<int>> _enumerateSubtensors(List<int> shape, int belowAxis) {
     // [[0], [1], [2], ...] for each axis
     // eg shape == [2, 4, 3],
     // [[0], [1]]
@@ -475,7 +601,7 @@ class NDList<X> {
     final axisEnums = [
       for (int shapeIndex = 0; shapeIndex < belowAxis; shapeIndex++)
         [
-          for (int i = 0; i < _shape[shapeIndex]; i++) [i]
+          for (int i = 0; i < shape[shapeIndex]; i++) [i]
         ]
     ];
 
@@ -652,7 +778,6 @@ extension Squeezing<X> on NDList<X> {
       return this;
     }
 
-    final removed1s = _shape.where((element) => element != 1).toList();
-    return reshape(removed1s);
+    return reshape(squeezeShape(_shape));
   }
 }
