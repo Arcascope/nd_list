@@ -87,6 +87,20 @@ class NDList<X> {
     return squeezeShape(_shape).length == 1;
   }
 
+  NDList<X> transpose([int otherAxis = 1]) {
+    final newShape = List<int>.from(_shape);
+    final otherLength = _shape[otherAxis];
+    final axis0Length = _shape[0];
+    newShape[0] = otherLength;
+    newShape[otherAxis] = axis0Length;
+
+    final newIndicesList = [
+      for (int i = 0; i < otherLength; i++)
+        _intIndexWithAxis(NDIndexResult.from(this), i, otherAxis).evaluate()
+    ];
+    return NDList.from<NDList<X>>(newIndicesList).cemented().reshape(newShape);
+  }
+
   List<X> toFlattenedList() {
     return _list;
   }
@@ -445,7 +459,7 @@ class NDList<X> {
 
   static NDIndexResult<Y> _stringIndex<Y>(
       NDIndexResult<Y> priorResult, String index, int axis) {
-    print("string index: $index");
+    // print("string index: $index");
     try {
       // is it just an int in string format?
       // .parse throws if cannot be parsed as an int

@@ -46,16 +46,16 @@ extension SpectralAnalysis on NDList<double> {
     return NDList.from(complexOutput);
   }
 
-  NDList<double> spectrogram(int nFFT) {
+  NDList<double> spectrogram(int nFFT, [int nOverlap = 1]) {
     if (!is1D) {
       return rolling(nFFT, axis: -1)
-          .reduce((a) => a.spectrogram(nFFT))
+          .reduce((a) => a.spectrogram(nFFT, nOverlap))
           .cemented();
     }
 
     return reshape([-1])
-        .rolling(nFFT, axis: 0)
-        .reduce((e) => e.fft().map((e) => e.abs()))
+        .rolling(nFFT, step: nFFT - nOverlap, axis: 0)
+        .reduce((e) => e.fft().map((e) => e.abs() * e.abs()))
         .cemented();
   }
 }

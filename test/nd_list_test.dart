@@ -902,6 +902,25 @@ void main() {
     });
   });
 
+  group('Transpose', () {
+    test('Transpose 2D', () {
+      final data = [
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0]
+      ];
+      final ndList = NDList.from<double>(data);
+
+      final transposed = ndList.transpose();
+
+      expect(transposed.shape, equals([3, 2]));
+
+      for (var i = 0; i < 3; i++) {
+        for (var j = 0; j < 2; j++) {
+          expect(transposed[[i, j]].item, equals(data[j][i]));
+        }
+      }
+    });
+  });
   group('Test errors', () {
     test('Test int indexing. Throw error only if out of bounds', () {
       final data = [
