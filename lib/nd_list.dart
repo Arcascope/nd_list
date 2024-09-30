@@ -81,6 +81,7 @@ class NDIndexResult<X> {
 /// In the end, `sliced` would represent `[[4.0, 5.0], [7.0, 8.0]]`.
 class NDList<X> {
   final List<X> _list = [];
+  List<X> get list => _list;
   final List<int> _shape = [];
 
   bool get is1D {
