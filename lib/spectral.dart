@@ -16,53 +16,40 @@ extension SpectralAnalysis on NDList<double> {
     return Complex.polar(1, angle);
   }
 
-  /// The Radix-2 split-radix FFT algorithm for real-valued data.
+  /// The Radix-2 FFT algorithm for real-valued data.
   List<Complex> splitRadixFFT(List<double> data) {
     final N = data.length;
-    if (N <= 1) {
+
+    // Base cases
+    if (N == 1) {
       return [Complex(data[0], 0)];
-    } else if (N == 2) {
-      // Handle N == 2 case separately
-      final e = data[0];
-      final o = data[1];
-      return [Complex(e + o, 0), Complex(e - o, 0)];
-    } else if (N == 4) {
-      // Handle N == 4 case separately
-      final e0 = data[0];
-      final e1 = data[1];
-      final o0 = data[2];
-      final o1 = data[3];
+    }
 
-      final t0 = twiddle(0, 4);
-      final t1 = twiddle(1, 4);
-
-      return [
-        Complex(e0 + e1 + o0 + o1, 0),
-        Complex(e0 - e1, 0) + t1 * Complex(0, o0 - o1),
-        Complex(e0 + e1 - o0 - o1, 0),
-        Complex(e0 - e1, 0) - t1 * Complex(0, o0 - o1),
-      ];
+    // Check if N is a power of 2
+    if ((N & (N - 1)) != 0) {
+      throw ArgumentError('FFT length must be a power of 2');
     }
 
     // Split into even and odd indices
-    final even = data.sublist(0, N ~/ 2);
-    final odd = data.sublist(N ~/ 2);
+    List<double> even = List<double>.filled(N ~/ 2, 0);
+    List<double> odd = List<double>.filled(N ~/ 2, 0);
+
+    for (int i = 0; i < N ~/ 2; i++) {
+      even[i] = data[2 * i];
+      odd[i] = data[2 * i + 1];
+    }
 
     // Recursively compute FFTs of even and odd parts
-    final evenFFT = splitRadixFFT(even);
-    final oddFFT = splitRadixFFT(odd);
+    List<Complex> evenFFT = splitRadixFFT(even);
+    List<Complex> oddFFT = splitRadixFFT(odd);
 
     // Combine results
-    final result = List.generate(N, (i) => Complex(0, 0));
-    for (int k = 0; k < N ~/ 4; k++) {
-      final t = twiddle(k, N);
-      final e = evenFFT[k];
-      final o = oddFFT[k];
-      final o1 = oddFFT[N ~/ 4 - k - 1].conjugate();
-      result[k] = e + t * o;
-      result[k + N ~/ 4] = e - t * o;
-      result[k + N ~/ 2] = e + t * o1;
-      result[k + 3 * N ~/ 4] = e - t * o1;
+    List<Complex> result = List<Complex>.filled(N, Complex.zero);
+    for (int k = 0; k < N ~/ 2; k++) {
+      Complex t = twiddle(k, N) * oddFFT[k];
+
+      result[k] = evenFFT[k] + t;
+      result[k + N ~/ 2] = evenFFT[k] - t;
     }
 
     return result;
