@@ -89,7 +89,7 @@ void main() {
       // For sine, we expect peaks at frequencies 1 and n-1 with imaginary component
       expect(fft.list[1].abs(), closeTo(n / 2, 0.1));
       expect(fft.list[n - 1].abs(), closeTo(n / 2, 0.1));
-      expect(fft.list[1].argument(), closeTo(pi / 2, 0.1)); // Phase check
+      expect(fft.list[1].argument().abs(), closeTo(pi / 2, 0.1)); // Phase check
     });
 
     test('Higher harmonic cosines', () {
@@ -142,7 +142,7 @@ void main() {
       // Check phase: cosine component should be real, sine should be imaginary
       expect(
           fft.list[3].argument(), lessThan(0.1)); // Near zero phase for cosine
-      expect((fft.list[5].argument() - pi / 2).abs(),
+      expect((fft.list[5].argument().abs() - pi / 2).abs(),
           lessThan(0.1)); // Near pi/2 phase for sine
     });
   });
@@ -157,14 +157,21 @@ void main() {
           [for (int i = 0; i < n; i++) cos(2 * pi * 4 * i / n)]);
 
       final spectrogram = signal.spectrogram(nFFT, hopLength: hopLength);
+      final spectrogramData = spectrogram
+          .toIteratedList()
+          .map((row) => row.map((e) => '$e').join(','))
+          .join('\n');
+      File('cosine_chirp_spectrogram.csv').writeAsStringSync(spectrogramData);
 
       // Check dimensions
       expect(spectrogram.shape, equals([1 + (n - nFFT) ~/ hopLength, nFFT]));
 
       // Check magnitude peaks at frequency bin 4 and n-4
       for (int t = 0; t < spectrogram.shape[0]; t++) {
-        // expect(spectrogram.item([t, 4]), greaterThan(spectrogram.item([t, 3])));
-        // expect(spectrogram.item([t, 4]), greaterThan(spectrogram.item([t, 5])));
+        expect(
+            spectrogram[[t, 4]].item!, greaterThan(spectrogram[[t, 3]].item!));
+        expect(
+            spectrogram[[t, 4]].item!, greaterThan(spectrogram[[t, 5]].item!));
       }
     });
 
@@ -174,10 +181,27 @@ void main() {
       final hopLength = 16;
 
       // Create a linear chirp (frequency increases linearly with time)
+      final freq =
+          NDList.from<double>([for (int i = 0; i < n; i++) 1 + 10 * i / n]);
       final signal = NDList.from<double>(
-          [for (int i = 0; i < n; i++) cos(2 * pi * (1 + 10 * i / n) * i / n)]);
+          [for (int i = 0; i < n; i++) cos(2 * pi * freq[i].item! * i / n)]);
 
       final spectrogram = signal.spectrogram(nFFT, hopLength: hopLength);
+
+      // save signal and spectrogram to CSV for visualization
+      final signalData = signal.toFlattenedList();
+      final signalCsv = List.generate(
+              signalData.length, (i) => '${freq[i].item},${signalData[i]}')
+          .join('\n');
+      File('chirp_signal.csv')
+          .writeAsStringSync('frequency,amplitude\n$signalCsv');
+
+      // spectrogram data is a 2D array shape (M, N), save it to CSV with M rows and N columns
+      final spectrogramData = spectrogram
+          .toIteratedList()
+          .map((row) => row.map((e) => '$e').join(','))
+          .join('\n');
+      File('chirp_spectrogram.csv').writeAsStringSync(spectrogramData);
 
       // Simply check dimensions for this complex signal
       expect(spectrogram.shape, equals([1 + (n - nFFT) ~/ hopLength, nFFT]));
@@ -187,19 +211,19 @@ void main() {
       var firstFramePeak = 0;
       var firstFrameMax = 0.0;
       for (int f = 0; f < nFFT ~/ 2; f++) {
-        // if (spectrogram.item([0, f]) > firstFrameMax) {
-        //   firstFrameMax = spectrogram.item([0, f]);
-        //   firstFramePeak = f;
-        // }
+        if (spectrogram[[0, f]].item! > firstFrameMax) {
+          firstFrameMax = spectrogram[[0, f]].item!;
+          firstFramePeak = f;
+        }
       }
 
       var lastFramePeak = 0;
       var lastFrameMax = 0.0;
       for (int f = 0; f < nFFT ~/ 2; f++) {
-        // if (spectrogram.item([spectrogram.shape[0]-1, f]) > lastFrameMax) {
-        //   lastFrameMax = spectrogram.item([spectrogram.shape[0]-1, f]);
-        //   lastFramePeak = f;
-        // }
+        if (spectrogram[[spectrogram.shape[0] - 1, f]].item! > lastFrameMax) {
+          lastFrameMax = spectrogram[[spectrogram.shape[0] - 1, f]].item!;
+          lastFramePeak = f;
+        }
       }
 
       // Last frame should have higher peak frequency than first frame
