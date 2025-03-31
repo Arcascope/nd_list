@@ -11,7 +11,7 @@ import 'package:nd_list/nd_list.dart';
 
 extension SpectralAnalysis on NDList<double> {
   /// Calculates the twiddle factor for a given index and length.
-  Complex twiddle(int k, int N) {
+  Complex fftPair(int k, int N) {
     final angle = -2 * pi * k / N;
     return Complex.polar(1, angle);
   }
@@ -46,33 +46,10 @@ extension SpectralAnalysis on NDList<double> {
     // Combine results
     List<Complex> result = List<Complex>.filled(N, Complex.zero);
     for (int k = 0; k < N ~/ 2; k++) {
-      Complex t = twiddle(k, N) * oddFFT[k];
+      Complex t = fftPair(k, N) * oddFFT[k];
 
       result[k] = evenFFT[k] + t;
       result[k + N ~/ 2] = evenFFT[k] - t;
-    }
-
-    return result;
-  }
-
-  /// Computes the Fast Fourier Transform of the NDList<double>
-  List<Complex> _fft(List<double> x, {bool isReal = true}) {
-    int N = x.length;
-
-    final z = List<Complex>.generate(N, (index) => Complex(x[index], 0));
-    if (N <= 1) return z;
-
-    // Cooley-Tukey FFT algorithm optimized for real input
-    List<Complex> even =
-        _fft([for (int i = 0; i < N ~/ 2; i++) x[2 * i]], isReal: false);
-    List<Complex> odd =
-        _fft([for (int i = 0; i < N ~/ 2; i++) x[2 * i + 1]], isReal: false);
-
-    List<Complex> result = List<Complex>.filled(N, Complex.zero);
-    for (int k = 0; k < N ~/ 2; k++) {
-      Complex t = Complex.polar(1.0, -2 * pi * k / N) * odd[k];
-      result[k] = even[k] + t;
-      result[k + N ~/ 2] = even[k] - t;
     }
 
     return result;
