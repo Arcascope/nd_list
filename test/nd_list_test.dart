@@ -104,6 +104,18 @@ void main() {
       expect(ndList[1].item!, equals(5.0));
       expect(ndList[2].item!, equals(5.0));
     });
+
+    test('Test can assign a slice of a 1d NDList, where end index is negative',
+        () {
+      final data = [1.0, 2.0, 3.0, 4.0];
+      final ndList = NDList.from<double>(data);
+
+      ndList['1:-1'] = 5.0;
+      expect(ndList[0].item!, equals(data[0]));
+      expect(ndList[3].item!, equals(data[3]));
+      expect(ndList[1].item!, equals(5.0));
+      expect(ndList[2].item!, equals(5.0));
+    });
     test('Test can assign an axis-0 element of a 2d NDList', () {
       final data = [
         [1.0, 2.0, 4.0],
@@ -174,6 +186,26 @@ void main() {
         expect(ndData[[i, 0]].item, equals(data[i][0]));
         expect(ndData[[i, 1]].item, equals(99.0));
         expect(ndData[[i, 2]].item, equals(99.0));
+      }
+    });
+    test(
+        'Test can assign axis-1 slice with last index negative of a 2d NDList<double> with 0d (double)',
+        () {
+      final data = [
+        [0.0, 1.0, 2.0],
+        [3.0, 4.0, 5.0],
+        [6.0, 7.0, 8.0],
+        [9.0, 10.0, 11.0]
+      ];
+
+      final ndData = NDList.from<double>(data);
+
+      final fillValue = 99.0;
+      ndData[[':', ':-1']] = fillValue;
+      for (int i = 0; i < ndData.shape[0]; i++) {
+        expect(ndData[[i, 0]].item, equals(fillValue), reason: "Row $i, 0");
+        expect(ndData[[i, 1]].item, equals(fillValue), reason: "Row $i, 1");
+        expect(ndData[[i, 2]].item, equals(data[i].last), reason: "Row $i, 2");
       }
     });
 
@@ -870,6 +902,25 @@ void main() {
     });
   });
 
+  group('Transpose', () {
+    test('Transpose 2D', () {
+      final data = [
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0]
+      ];
+      final ndList = NDList.from<double>(data);
+
+      final transposed = ndList.transpose();
+
+      expect(transposed.shape, equals([3, 2]));
+
+      for (var i = 0; i < 3; i++) {
+        for (var j = 0; j < 2; j++) {
+          expect(transposed[[i, j]].item, equals(data[j][i]));
+        }
+      }
+    });
+  });
   group('Test errors', () {
     test('Test int indexing. Throw error only if out of bounds', () {
       final data = [

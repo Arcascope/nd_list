@@ -1,5 +1,9 @@
 library nd_list;
 
+import 'dart:math';
+
+export './spectral.dart';
+
 List<int> unsqueezeShape(List<int> shape, int axis) {
   if (axis < 0) {
     axis += shape.length + 1;
@@ -8,7 +12,9 @@ List<int> unsqueezeShape(List<int> shape, int axis) {
 }
 
 List<int> squeezeShape(List<int> shape) {
-  return shape.where((element) => element != 1).toList();
+  final squeezedShape = shape.where((element) => element != 1).toList();
+
+  return (squeezedShape.isEmpty) ? [1] : squeezedShape;
 }
 
 int getLinearIndex(List<int> shape, List<int> index) {
@@ -75,7 +81,30 @@ class NDIndexResult<X> {
 /// In the end, `sliced` would represent `[[4.0, 5.0], [7.0, 8.0]]`.
 class NDList<X> {
   final List<X> _list = [];
+  List<X> get list => _list;
   final List<int> _shape = [];
+
+  bool get is1D {
+    return squeezeShape(_shape).length == 1;
+  }
+
+  NDList<X> transpose([int otherAxis = 1]) {
+    final newShape = List<int>.from(_shape);
+    final otherLength = _shape[otherAxis];
+    final axis0Length = _shape[0];
+    newShape[0] = otherLength;
+    newShape[otherAxis] = axis0Length;
+
+    final newIndicesList = [
+      for (int i = 0; i < otherLength; i++)
+        _intIndexWithAxis(NDIndexResult.from(this), i, otherAxis).evaluate()
+    ];
+    return NDList.from<NDList<X>>(newIndicesList).cemented().reshape(newShape);
+  }
+
+  List<X> toFlattenedList() {
+    return _list;
+  }
 
   List toIteratedList() {
     // Note! Originally from tflite_flutter's ListShape extension.
@@ -303,6 +332,7 @@ class NDList<X> {
       final parts = slice.split(':');
       final start = parts[0].isEmpty ? 0 : int.parse(parts[0]);
       final end = parts[1].isEmpty ? null : int.parse(parts[1]);
+
       return (start, end);
     } catch (e) {
       return null;
@@ -430,8 +460,7 @@ class NDList<X> {
 
   static NDIndexResult<Y> _stringIndex<Y>(
       NDIndexResult<Y> priorResult, String index, int axis) {
-    // TODO: remove print
-    print('string index: "$index"');
+    // print("string index: $index");
     try {
       // is it just an int in string format?
       // .parse throws if cannot be parsed as an int
@@ -450,16 +479,10 @@ class NDList<X> {
   /// This method is used to index the NDList with a list of valid indices, i.e. ints and formatted slice strings.
   static NDIndexResult<X> _listIndex<X>(
       NDIndexResult<X> priorResult, List index) {
-    // TODO: remove print
-    print('list index: $index');
     for (var i = 0; i < index.length; i++) {
       if (index[i] is String) {
-        // TODO: remove print
-        print('string index: "${index[i]}"');
         priorResult = _stringIndex(priorResult, index[i], i);
       } else if (index[i] is int) {
-        // TODO: remove print
-        print("int index: ${index[i]}");
         priorResult = _intIndexWithAxis(priorResult, index[i], i);
       } else {
         throw ArgumentError(
@@ -471,8 +494,6 @@ class NDList<X> {
 
   static NDIndexResult<X> _intIndex<X>(
       NDIndexResult<X> priorResult, int index) {
-    // TODO: remove print
-    print('int index: $index');
     if (priorResult.shape.isEmpty) {
       throw ArgumentError('Cannot index an empty NDList');
     }
@@ -500,8 +521,6 @@ class NDList<X> {
   /// This builds on the base case of an axis-0 int index, and allows for indexing on any axis.
   static NDIndexResult<X> _intIndexWithAxis<X>(
       NDIndexResult<X> priorResult, int index, int axis) {
-    // TODO: remove print
-    print('int index with axis: $index, axis $axis');
     return _slice(priorResult, index, index + 1, axis: axis);
   }
 
@@ -513,12 +532,13 @@ class NDList<X> {
       NDIndexResult<Y> priorResult, int start, int end,
       {required int axis}) {
     // TODO: uncomment and fix, test
-    // if (start < 0) {
-    //   start += priorResult.shape[axis];
-    // }
-    // if (end < 0) {
-    //   end += priorResult.shape[axis];
-    // }
+    // support for negative indices
+    if (start < 0) {
+      start %= priorResult.shape[axis];
+    }
+    if (end < 0) {
+      end %= priorResult.shape[axis];
+    }
     // if (end < start) {
     //   return _slice(priorResult, end, start, axis: axis);
     // }
@@ -627,10 +647,11 @@ class NDList<X> {
       if (_list.isEmpty) return NDList._([], newShape);
       throw ArgumentError('New shape cannot have a dimension of 0');
     }
-    final positiveDims = newShape.where((element) => element < 1).toList();
-    if (positiveDims.length > 1) {
+    final impliedDims = newShape.where((element) => element == -1).toList();
+    if (impliedDims.length > 1) {
       throw ArgumentError('Only one dimension can be -1');
     }
+    final positiveDims = newShape.where((element) => element > 0).toList();
     final nSpecified = _product(positiveDims);
     if (count % nSpecified != 0) {
       throw ArgumentError('New shape must have the same number of elements');
@@ -705,6 +726,36 @@ extension NumNDList on NDList {
   }
 }
 
+class RollingResult<X> {
+  List<NDIndexResult<X>> slices;
+  NDList<X> baseArray;
+
+  RollingResult._(this.slices, this.baseArray);
+
+  factory RollingResult(NDList<X> baseArray, int windowSize,
+      {int step = 1, int axis = 0}) {
+    // allow for negative axis to mean "from end"
+    // eg -1 means "last axis"
+    axis = axis % baseArray.nDims;
+    final slices = [
+      for (int i = windowSize - 1; i < baseArray.shape[axis]; i = i + step)
+        NDList._stringIndex(NDIndexResult.from(baseArray),
+            '${i - windowSize + 1}:${i + 1}', axis)
+    ];
+    return RollingResult._(slices, baseArray);
+  }
+
+  NDList<Y> reduce<Y>(Y Function(NDList<X>) f) {
+    return NDList.from<Y>(slices.map((e) => f(e.evaluate())).toList());
+  }
+}
+
+extension Rolling<X> on NDList<X> {
+  RollingResult<X> rolling(int windowSize, {int step = 1, int axis = 0}) {
+    return RollingResult(this, windowSize, step: step, axis: axis);
+  }
+}
+
 extension ArithmeticNDList<X extends num> on NDList<X> {
   NDList<X> zipWith(NDList<X> other, X Function(X, X) f) {
     if (!_shapeMatches(other)) {
@@ -733,6 +784,63 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
   operator /(NDList<X> other) {
     return this.zipWith(other, ((p0, p1) => (p0 / p1) as X));
   }
+
+  X sum() {
+    return _list.reduce((value, element) => value + element as X);
+  }
+
+  double mean() {
+    return sum() / count;
+  }
+
+  X quantile(double q) {
+    final sorted = _list..sort();
+    final index = (count - 1) * q;
+    final lower = sorted[index.floor()];
+    final upper = sorted[index.ceil()];
+    return lower + (upper - lower) * (index - index.floor()) as X;
+  }
+
+  X median() {
+    final sorted = _list..sort();
+    final mid = count ~/ 2;
+    return (count.isEven ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid])
+        as X;
+  }
+
+  X max() {
+    return _list.reduce((value, element) => value > element ? value : element);
+  }
+
+  X min() {
+    return _list.reduce((value, element) => value < element ? value : element);
+  }
+
+  NDList<X> iqrNormalizationAdaptive(
+      {required int windowSize, double lowerQ = 0.25, double upperQ = 0.75}) {
+    final lowerQResult = rolling(windowSize).quantile(0.25);
+    final higherQResult = rolling(windowSize).quantile(0.75);
+    final iqr = higherQResult - lowerQResult;
+
+    return (this - lowerQResult) / iqr * 2;
+  }
+
+  NDList<X> sumAlong({int axis = 0}) {
+    return rolling(1, axis: axis).sum();
+  }
+}
+
+extension NumericalAggregation<X extends num> on RollingResult<X> {
+  NDList<X> sum() => reduce((e) => e.sum());
+
+  NDList<double> mean() => reduce((e) => e.mean());
+
+  NDList<X> median() => reduce((e) => e.median());
+
+  NDList<X> quantile(double q) => reduce((e) => e.quantile(q));
+
+  NDList<X> max() => reduce((e) => e.max());
+  NDList<X> min() => reduce((e) => e.min());
 }
 
 extension MultiLinear<X> on NDList<NDList<X>> {
