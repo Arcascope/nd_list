@@ -82,10 +82,12 @@ void main() {
       ]);
       final result = nd.norm(axis: 0, order: 1).list;
       expect(result.length, 2);
-      // expect(result[0].length, 2);
-      // expect(result[1].length, 2);
-      // expect(result[0][0], closeTo(6.0, 1e-9));
-      // expect(result[1][1], closeTo(14.0, 1e-9));
+      expect(result[0].length, 2);
+      expect(result[1].length, 2);
+      expect(result[0][0], closeTo(6.0, 1e-9));
+      expect(result[0][1], closeTo(8.0, 1e-9));
+      expect(result[1][0], closeTo(10.0, 1e-9));
+      expect(result[1][1], closeTo(12.0, 1e-9));
     });
   });
 }
