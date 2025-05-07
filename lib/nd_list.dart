@@ -846,11 +846,18 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
           pow(
             _list.fold<double>(0.0, (sum, e) => sum + pow(e.abs(), order).toDouble()),
             1 / order,
-            ).toDouble()
+          ).toDouble()
         ]);
       }
     } else {
-      return rolling(1, axis: axis).reduce((slice) {
+      if (axis == 0) {
+        return this.transpose().norm(order: order, axis: 1);
+      }
+      final slices = NDList._enumerateSubtensors(shape, axis);
+      final values = slices.map((indexPrefix) {
+        final resolved = _compoundIndexWithEnumeration(this.shape, indexPrefix);
+        final slice = NDList._slice(resolved, 0, shape[axis], axis: axis).evaluate();
+
         if (order == double.infinity) {
           return slice._list.map((e) => e.abs().toDouble()).reduce((a, b) => a > b ? a : b);
         } else if (order == 1) {
@@ -861,7 +868,9 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
             1 / order,
           ).toDouble();
         }
-      });
+      }).toList();
+
+      return NDList.from<double>(values);
     }
   }
 }
@@ -923,5 +932,16 @@ extension Squeezing<X> on NDList<X> {
     }
 
     return reshape(squeezeShape(_shape));
+  }
+}
+
+// Extension to allow .norm() on NDList<dynamic>
+extension ArithmeticNDListFallback on NDList<dynamic> {
+  NDList<double> norm({num order = 2, int? axis}) {
+    final numList = NDList<num>._(
+      this._list.map((e) => e as num).toList(),
+      this.shape,
+    );
+    return numList.norm(order: order, axis: axis);
   }
 }
