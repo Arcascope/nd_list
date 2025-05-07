@@ -828,6 +828,42 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
   NDList<X> sumAlong({int axis = 0}) {
     return rolling(1, axis: axis).sum();
   }
+
+  /// Computes the L^order norm of the NDList.
+  /// 
+  /// If axis is null, computes the global norm (all elements).
+  /// If axis is specified, computes the norm slice-wise along that axis.
+  NDList<double> norm({num order = 2, int? axis}) {
+    if (axis == null) {
+      if (order == double.infinity) {
+        return NDList.from<double>([
+          _list.map((e) => e.abs().toDouble()).reduce((a, b) => a > b ? a : b)
+        ]);
+      } else if (order == 1) {
+        return NDList.from<double>([_list.fold<double>(0.0, (sum, e) => sum + e.abs().toDouble())]);
+      } else {
+        return NDList.from<double>([
+          pow(
+            _list.fold<double>(0.0, (sum, e) => sum + pow(e.abs(), order).toDouble()),
+            1 / order,
+            ).toDouble()
+        ]);
+      }
+    } else {
+      return rolling(1, axis: axis).reduce((slice) {
+        if (order == double.infinity) {
+          return slice._list.map((e) => e.abs().toDouble()).reduce((a, b) => a > b ? a : b);
+        } else if (order == 1) {
+          return slice._list.fold<double>(0.0, (sum, e) => sum + e.abs().toDouble());
+        } else {
+          return pow(
+            slice._list.fold<double>(0.0, (sum, e) => sum + pow(e.abs(), order).toDouble()),
+            1 / order,
+          ).toDouble();
+        }
+      });
+    }
+  }
 }
 
 extension NumericalAggregation<X extends num> on RollingResult<X> {
