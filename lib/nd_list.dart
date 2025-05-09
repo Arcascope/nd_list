@@ -917,6 +917,33 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
         );
     }
   }
+
+  /// Computes the first-order discrete difference along the specified axis.
+  NDList<X> diff({int axis = -1}) {
+    if (axis < 0) {
+      axis += nDims;
+    }
+    if (axis < 0 || axis >= nDims) {
+      throw ArgumentError('Invalid axis $axis for tensor with shape ${this.shape}');
+    }
+
+    final diffs = NDList.slicesAlongAxis(this, axis);
+    final allDiffs = diffs.map((slice) {
+      List<num> diffValues = [];
+      for (var i = 0; i < slice.length - 1; i++) {
+        final current = slice[i].item!;
+        final next = slice[i + 1].item!;
+        final diff = next - current;
+        diffValues.add(diff);
+      }
+      return diffValues;
+    },).toList();
+
+    final newShape = shape;
+    newShape[axis] -= 1;
+
+    return NDList.from<X>(allDiffs).reshape(newShape);
+  }
 }
 
 extension NumericalAggregation<X extends num> on RollingResult<X> {
