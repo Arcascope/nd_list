@@ -893,10 +893,10 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
 
   /// Computes the first-order discrete difference along the specified axis.
   NDList<X> diff({int axis = -1}) {
-    axis %= nDims;
-    if (axis < 0 || axis >= nDims) {
-      throw ArgumentError('Invalid axis $axis for tensor with shape $shape');
+    if (nDims == 0 || count == 1) {
+      throw ArgumentError('Cannot compute difference on a scalar');
     }
+    axis %= nDims;
 
     final diffs = NDList.slicesAlongAxis(this, axis);
     final allDiffs = diffs.map(
