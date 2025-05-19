@@ -5,7 +5,7 @@ void main() {
   group('Summation of full arrays', () {
     test('Sum of (3,) array', () {
       NDList<double> x = NDList.from([1.0, 2.0, 3.0]);
-      double sum = x.sum();
+      double sum = x.sum().item!;
       expect(sum, equals(6.0));
     });
     test('Sum of (3, 1) array', () {
@@ -14,14 +14,14 @@ void main() {
         [2.0],
         [3.0]
       ]);
-      double sum = x.sum();
+      double sum = x.sum().item!;
       expect(sum, equals(6.0));
     });
     test('Sum of (1, 3) array', () {
       NDList<double> x = NDList.from([
         [1.0, 2.0, 3.0]
       ]);
-      double sum = x.sum();
+      double sum = x.sum().item!;
       expect(sum, equals(6.0));
     });
 
@@ -30,7 +30,7 @@ void main() {
         [1.0, 2.0, 3.0],
         [4.0, 5.0, 6.0]
       ]);
-      double sum = x.sum();
+      double sum = x.sum().item!;
       expect(sum, equals(21.0));
     });
   });
@@ -38,9 +38,9 @@ void main() {
   group('Summation along a single axis', () {
     test('Sum of (3,) array along axis 0', () {
       NDList<double> x = NDList.from([1.0, 2.0, 3.0]);
-      NDList<double> sum = x.sumAlong(axis: 0);
-      expect(sum.shape, equals([3]));
-      expect(sum, equals(x));
+      NDList<double> sum = x.sum(axis: 0);
+      expect(sum.shape, equals([]));
+      expect(sum.item!, 6.0);
     });
 
     test('Sum of (3, 1) array along axis 0', () {
@@ -49,8 +49,8 @@ void main() {
         [2.0],
         [3.0]
       ]);
-      NDList<double> sum = x.sumAlong(axis: 0);
-      expect(sum.shape, equals([1, 1]));
+      NDList<double> sum = x.sum(axis: 0);
+      expect(sum.shape, equals([1]));
       expect(sum.toFlattenedList(), equals([6.0]));
     });
 
@@ -58,9 +58,9 @@ void main() {
       NDList<double> x = NDList.from([
         [1.0, 2.0, 3.0]
       ]);
-      NDList<double> sum = x.sumAlong(axis: 0);
-      expect(sum.shape, equals([1, 1]));
-      expect(sum.toFlattenedList(), equals([6.0]));
+      NDList<double> sum = x.sum(axis: 0);
+      expect(sum.shape, equals([3]));
+      expect(sum, equals(x.flatten()));
     });
 
     test('Sum of (2, 3) array along axis 0', () {
@@ -68,9 +68,9 @@ void main() {
         [1.0, 2.0, 3.0],
         [4.0, 5.0, 6.0]
       ]);
-      NDList<double> sum = x.sumAlong(axis: 0);
-      expect(sum.shape, equals([1, 3]));
-      expect(sum.toFlattenedList(), equals([5.0, 7.0, 9.0]));
+      NDList<double> sum = x.sum(axis: 0);
+      expect(sum.shape, equals([3]));
+      expect(sum.list, equals([5.0, 7.0, 9.0]));
     });
 
     test('Sum of (2, 3) array along axis 1', () {
@@ -78,8 +78,8 @@ void main() {
         [1.0, 2.0, 3.0],
         [4.0, 5.0, 6.0]
       ]);
-      NDList<double> sum = x.sumAlong(axis: 1);
-      expect(sum.shape, equals([2, 1]));
+      NDList<double> sum = x.sum(axis: 1);
+      expect(sum.shape, equals([2]));
       expect(sum.toFlattenedList(), equals([6.0, 15.0]));
     });
   });

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:nd_list/nd_list.dart';
 import 'package:test/test.dart';
 
@@ -934,6 +936,230 @@ void main() {
       expect(() => ndList[2], throwsRangeError);
       expect(ndList[-1], equals(NDList.from<double>([data[1]])));
       expect(ndList[-2], equals(NDList.from<double>([data[0]])));
+    });
+  });
+
+  // Test min max abs, etc.
+  group('Test min max abs', () {
+    test('Test min', () {
+      final data = [
+        [1.0, 2.0, 4.0],
+        [3.0, 4.0, 16.0]
+      ];
+      final ndList = NDList.from<double>(data);
+
+      expect(ndList.min(), equals(1.0));
+    });
+
+    test('Test max', () {
+      final data = [
+        [1.0, 2.0, 4.0],
+        [3.0, 4.0, 16.0]
+      ];
+      final ndList = NDList.from<double>(data);
+
+      expect(ndList.max(), equals(16.0));
+    });
+
+    test('Test abs', () {
+      final data = [
+        [-1.0, -2.0, -4.0],
+        [-3.0, -4.0, -16.0]
+      ];
+      final ndList = NDList.from<double>(data);
+
+      expect(ndList.abs().sum().item!, equals(30.0));
+      expect(ndList.abs()[[0, 0]].item, equals(1.0));
+      expect(ndList.abs()[[1, 2]].item, equals(16.0));
+    });
+  });
+
+  //Test slicesAlongAxis
+  group('slicesAlongAxis', () {
+    test('slices along axis 0 of 2D array', () {
+      final data = [
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0]
+      ];
+      final nd = NDList.from<double>(data);
+      final slices = NDList.slicesAlongAxis(nd, 0);
+      expect(slices.length, 3);
+      expect(slices[0], equals(NDList.from<double>([1.0, 4.0])));
+      expect(slices[1], equals(NDList.from<double>([2.0, 5.0])));
+      expect(slices[2], equals(NDList.from<double>([3.0, 6.0])));
+    });
+
+    test('slices along axis 1 of 2D array', () {
+      final data = [
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0]
+      ];
+      final nd = NDList.from<double>(data);
+      final slices = NDList.slicesAlongAxis(nd, 1);
+      expect(slices.length, 2);
+      expect(slices[0], equals(NDList.from<double>([1.0, 2.0, 3.0])));
+      expect(slices[1], equals(NDList.from<double>([4.0, 5.0, 6.0])));
+    });
+
+    test('slices along axis 0 of 3D array', () {
+      final data = [
+        [
+          [1.0, 2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0, 8.0],
+          [9.0, 10.0, 11.0, 12.0],
+        ],
+        [
+          [13.0, 14.0, 15.0, 16.0],
+          [17.0, 18.0, 19.0, 20.0],
+          [21.0, 22.0, 23.0, 24.0],
+        ]
+      ];
+      final nd = NDList.from<double>(data);
+      final slices = NDList.slicesAlongAxis(nd, 0);
+      expect(slices.length, 12);
+      expect(slices[0], equals(NDList.from<double>([1.0, 13.0])));
+      expect(slices[1], equals(NDList.from<double>([2.0, 14.0])));
+      expect(slices[2], equals(NDList.from<double>([3.0, 15.0])));
+      expect(slices[3], equals(NDList.from<double>([4.0, 16.0])));
+      expect(slices[4], equals(NDList.from<double>([5.0, 17.0])));
+      expect(slices[5], equals(NDList.from<double>([6.0, 18.0])));
+      expect(slices[6], equals(NDList.from<double>([7.0, 19.0])));
+      expect(slices[7], equals(NDList.from<double>([8.0, 20.0])));
+      expect(slices[8], equals(NDList.from<double>([9.0, 21.0])));
+      expect(slices[9], equals(NDList.from<double>([10.0, 22.0])));
+      expect(slices[10], equals(NDList.from<double>([11.0, 23.0])));
+      expect(slices[11], equals(NDList.from<double>([12.0, 24.0])));
+    });
+    test('slices along axis 1 of 3D array', () {
+      final data = [
+        [
+          [1.0, 2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0, 8.0],
+          [9.0, 10.0, 11.0, 12.0],
+        ],
+        [
+          [13.0, 14.0, 15.0, 16.0],
+          [17.0, 18.0, 19.0, 20.0],
+          [21.0, 22.0, 23.0, 24.0],
+        ]
+      ];
+      final nd = NDList.from<double>(data);
+      final slices = NDList.slicesAlongAxis(nd, 1);
+      expect(slices.length, 8);
+      expect(slices[0], equals(NDList.from<double>([1.0, 5.0, 9.0])));
+      expect(slices[1], equals(NDList.from<double>([2.0, 6.0, 10.0])));
+      expect(slices[2], equals(NDList.from<double>([3.0, 7.0, 11.0])));
+      expect(slices[3], equals(NDList.from<double>([4.0, 8.0, 12.0])));
+      expect(slices[4], equals(NDList.from<double>([13.0, 17.0, 21.0])));
+      expect(slices[5], equals(NDList.from<double>([14.0, 18.0, 22.0])));
+      expect(slices[6], equals(NDList.from<double>([15.0, 19.0, 23.0])));
+      expect(slices[7], equals(NDList.from<double>([16.0, 20.0, 24.0])));
+    });
+
+    test('slices along axis 2 of 3D array', () {
+      final data = [
+        [
+          [1.0, 2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0, 8.0],
+          [9.0, 10.0, 11.0, 12.0],
+        ],
+        [
+          [13.0, 14.0, 15.0, 16.0],
+          [17.0, 18.0, 19.0, 20.0],
+          [21.0, 22.0, 23.0, 24.0],
+        ]
+      ];
+      final nd = NDList.from<double>(data);
+      final slices = NDList.slicesAlongAxis(nd, 2);
+      expect(slices.length, 6);
+      expect(slices[0], equals(NDList.from<double>([1.0, 2.0, 3.0, 4.0])));
+      expect(slices[1], equals(NDList.from<double>([5.0, 6.0, 7.0, 8.0])));
+      expect(slices[2], equals(NDList.from<double>([9.0, 10.0, 11.0, 12.0])));
+      expect(slices[3], equals(NDList.from<double>([13.0, 14.0, 15.0, 16.0])));
+      expect(slices[4], equals(NDList.from<double>([17.0, 18.0, 19.0, 20.0])));
+      expect(slices[5], equals(NDList.from<double>([21.0, 22.0, 23.0, 24.0])));
+    });
+
+    test('throws on invalid axis', () {
+      final nd = NDList.from<double>([1.0, 2.0, 3.0]);
+      expect(() => NDList.slicesAlongAxis(nd, -1), throwsArgumentError);
+      expect(() => NDList.slicesAlongAxis(nd, 1), throwsArgumentError);
+    });
+  });
+
+  // Test reduceAlongAxis
+  group('Test reduceAlongAxis', () {
+    test('sum along axis 0 of 3D array', () {
+      final data = [
+        [
+          [1.0, 2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0, 8.0],
+          [9.0, 10.0, 11.0, 12.0],
+        ],
+        [
+          [13.0, 14.0, 15.0, 16.0],
+          [17.0, 18.0, 19.0, 20.0],
+          [21.0, 22.0, 23.0, 24.0],
+        ]
+      ];
+      final nd = NDList.from<double>(data);
+      final reduced = nd.reduceAlongAxis((slice) {
+        return slice.sum().item!;
+      }, axis: 0);
+      expect(reduced.shape, equals([3, 4]));
+      expect(reduced[0].squeeze(),
+          equals(NDList.from<double>([14.0, 16.0, 18.0, 20.0])));
+      expect(reduced[1].squeeze(),
+          equals(NDList.from<double>([22.0, 24.0, 26.0, 28.0])));
+      expect(reduced[2].squeeze(),
+          equals(NDList.from<double>([30.0, 32.0, 34.0, 36.0])));
+    });
+
+    test('sum along axis 1 of 3D array', () {
+      final data = [
+        [
+          [1.0, 2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0, 8.0],
+          [9.0, 10.0, 11.0, 12.0],
+        ],
+        [
+          [13.0, 14.0, 15.0, 16.0],
+          [17.0, 18.0, 19.0, 20.0],
+          [21.0, 22.0, 23.0, 24.0],
+        ]
+      ];
+      final nd = NDList.from<double>(data);
+      final reduced = nd.reduceAlongAxis((slice) {
+        return slice.sum().item!;
+      }, axis: 1);
+      expect(reduced.shape, equals([2, 4]));
+      expect(reduced[0].squeeze(),
+          equals(NDList.from<double>([15.0, 18.0, 21.0, 24.0])));
+      expect(reduced[1].squeeze(),
+          equals(NDList.from<double>([51.0, 54.0, 57.0, 60.0])));
+    });
+    test('sum along axis 2 of 3D array', () {
+      final data = [
+        [
+          [1.0, 2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0, 8.0],
+          [9.0, 10.0, 11.0, 12.0],
+        ],
+        [
+          [13.0, 14.0, 15.0, 16.0],
+          [17.0, 18.0, 19.0, 20.0],
+          [21.0, 22.0, 23.0, 24.0],
+        ]
+      ];
+      final nd = NDList.from<double>(data);
+      final reduced = nd.reduceAlongAxis((slice) {
+        return slice.sum().item!;
+      }, axis: 2);
+      expect(reduced.shape, equals([2, 3]));
+      expect(reduced[0].squeeze(),
+          equals(NDList.from<double>([10.0, 26.0, 42.0])));
+      expect(reduced[1].squeeze(),
+          equals(NDList.from<double>([58.0, 74.0, 90.0])));
     });
   });
 }
