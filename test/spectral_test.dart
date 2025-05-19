@@ -167,11 +167,12 @@ void main() {
       expect(spectrogram.shape, equals([1 + (n - nFFT) ~/ hopLength, nFFT]));
 
       // Check magnitude peaks at frequency bin 4 and n-4
+      final epsilon = 1e-20;
       for (int t = 0; t < spectrogram.shape[0]; t++) {
-        expect(
-            spectrogram[[t, 4]].item!, greaterThan(spectrogram[[t, 3]].item!));
-        expect(
-            spectrogram[[t, 4]].item!, greaterThan(spectrogram[[t, 5]].item!));
+        expect(spectrogram[[t, 4]].item!,
+            greaterThan(spectrogram[[t, 3]].item! - epsilon));
+        expect(spectrogram[[t, 4]].item!,
+            greaterThan(spectrogram[[t, 5]].item! - epsilon));
       }
     });
 

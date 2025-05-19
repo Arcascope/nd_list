@@ -12,8 +12,8 @@ const int sampleRate = 48000; // Sample rate for the microphone
 const int bufferSeconds = 30; // Buffer size in seconds for spectrogram display
 const int nFFT = 1024; // Reduced FFT size (was 4096)
 const int hopLength = nFFT ~/ 2; // Hop length for FFT
-const int redrawIntervalSeconds = 1; // Redraw every second
-const int downsampleFactor = 4; // Average every 4 samples into 1
+const double redrawIntervalSeconds = 1; // Redraw every second
+const int downsampleFactor = 2; // Average every 4 samples into 1
 
 void main() {
   runApp(const MyApp());
@@ -50,7 +50,7 @@ class _SpectrogramScreenState extends State<SpectrogramScreen> {
   int _spectrogramIndex = 0;
   NDList<double>? _currentSpectrogram;
   Timer? _uiUpdateTimer;
-  int _secondsUntilRedraw = redrawIntervalSeconds;
+  double _secondsUntilRedraw = redrawIntervalSeconds;
   int _sampleCount = 0; // For downsampling
 
   @override
@@ -109,15 +109,16 @@ class _SpectrogramScreenState extends State<SpectrogramScreen> {
 
       // Set up a timer to update the UI at a set interval
       _secondsUntilRedraw = redrawIntervalSeconds;
-      _uiUpdateTimer =
-          Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      const tickerUpdateDuration = Duration(milliseconds: 100);
+      _uiUpdateTimer = Timer.periodic(tickerUpdateDuration, (timer) {
         if (mounted) {
           setState(() {
-            _secondsUntilRedraw = (redrawIntervalSeconds * 2 -
-                    (timer.tick % (redrawIntervalSeconds * 2))) ~/
-                2;
+            _secondsUntilRedraw = (redrawIntervalSeconds -
+                    (tickerUpdateDuration * timer.tick).inMilliseconds /
+                        1000.0) %
+                redrawIntervalSeconds;
             // Force redraw regardless of countdown
-            if (_currentSpectrogram != null) {
+            if (_currentSpectrogram != null && _secondsUntilRedraw <= 0) {
               // Force rebuild by creating a new painter instance
               _currentSpectrogram = _spectrogramBuffer;
             }

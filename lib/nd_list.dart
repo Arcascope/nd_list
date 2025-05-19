@@ -645,14 +645,17 @@ class NDList<X> {
   /// Returns a list of NDList slices, each one corresponding to a fixed index along the specified axis.
   static List<NDList<X>> slicesAlongAxis<X>(NDList<X> nd, int axis) {
     if (axis < 0 || axis >= nd.shape.length) {
-      throw ArgumentError('Invalid axis $axis for tensor with shape ${nd.shape}');
+      throw ArgumentError(
+          'Invalid axis $axis for tensor with shape ${nd.shape}');
     }
-    // final computationAxis = axis;
     final slices = <NDList<X>>[];
+
     final outputShape = List<int>.from(nd.shape);
     outputShape.removeAt(axis);
+    // final fakeTensor = NDList.filled(outputShape, 0);
+    final indexCombos =
+        NDList._enumerateSubtensors(outputShape, outputShape.length);
     // Create all possible index combinations for the other axes
-    final indexCombos = NDList._enumerateIndexCombinations(outputShape);
     // For each index combination, add ':' at the position of the axis
     for (var idx in indexCombos) {
       final fullIndex = List.generate(nd.shape.length, (i) {
@@ -664,26 +667,6 @@ class NDList<X> {
       slices.add(slice.squeeze());
     }
     return slices;
-  }
-
-  static List<List<int>> _enumerateIndexCombinations(List<int> shape) {
-    if (shape.isEmpty) return [[]];
-    final result = <List<int>>[];
-
-    void helper(List<int> current, int depth) {
-      if (depth == shape.length) {
-        result.add(List.from(current));
-        return;
-      }
-      for (int i = 0; i < shape[depth]; i++) {
-        current.add(i);
-        helper(current, depth + 1);
-        current.removeLast();
-      }
-    }
-
-    helper([], 0);
-    return result;
   }
 
   NDList<X> reshape(List<int> newShape) {
@@ -842,12 +825,20 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
     return this.zipWith(other, ((p0, p1) => (p0 / p1) as X));
   }
 
-  X sum() {
-    return _list.reduce((value, element) => value + element as X);
+  NDList<double> scale(double other) {
+    return map((e) => (e * other));
   }
 
-  double mean() {
-    return sum() / count;
+  NDList<X> sum({int? axis}) {
+    if (axis != null) {
+      return reduceAlongAxis((e) => e.sum().item!, axis: axis);
+    }
+    return NDList._(
+        [_list.reduce((value, element) => value + element as X)], [1]);
+  }
+
+  NDList<double> mean({int? axis}) {
+    return sum(axis: axis).scale(1 / count);
   }
 
   X quantile(double q) {
@@ -877,44 +868,26 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
     return map((e) => e.abs() as X);
   }
 
-  NDList<X> iqrNormalizationAdaptive(
-      {required int windowSize, double lowerQ = 0.25, double upperQ = 0.75}) {
-    final lowerQResult = rolling(windowSize).quantile(0.25);
-    final higherQResult = rolling(windowSize).quantile(0.75);
-    final iqr = higherQResult - lowerQResult;
-
-    return (this - lowerQResult) / iqr * 2;
-  }
-
-  NDList<X> sumAlong({int axis = 0}) {
-    return rolling(1, axis: axis).sum();
-  }
-
-  /// Computes the L^order norm of the NDList.
-  /// 
+  // NDList<X> iqrNormalizationAdap  /// Computes the L^order norm of the NDList.
+  ///
   /// If axis is null, computes the global norm (all elements).
   /// If axis is specified, computes the norm slice-wise along that axis.
   NDList<double> norm({num order = 2, int? axis}) {
     if (axis == null) {
       if (order == double.infinity) {
-        return NDList.from<double>(
-          [this.abs().max()]
-        ); 
+        return NDList.from<double>([this.abs().max()]);
       } else if (order == 1) {
-        return NDList.from<double>(
-          [this.abs().sum()]
-        );
+        return this.abs().sum().map((e) => e.toDouble());
       } else {
         return NDList.from<double>([
-          pow(this.abs().map((e) => pow(e, order)).sum(), 1 / order).toDouble()
+          pow(this.abs().map((e) => pow(e, order)).sum().item!, 1 / order)
+              .toDouble()
         ]);
       }
     } else {
-      return reduceAlongAxis<double>(
-        (slice) {
-          return slice.norm(order: order).item!;
-        }, axis: axis
-        );
+      return reduceAlongAxis<double>((slice) {
+        return slice.norm(order: order).item!;
+      }, axis: axis);
     }
   }
 
@@ -924,39 +897,29 @@ extension ArithmeticNDList<X extends num> on NDList<X> {
       axis += nDims;
     }
     if (axis < 0 || axis >= nDims) {
-      throw ArgumentError('Invalid axis $axis for tensor with shape ${this.shape}');
+      throw ArgumentError(
+          'Invalid axis $axis for tensor with shape ${this.shape}');
     }
 
     final diffs = NDList.slicesAlongAxis(this, axis);
-    final allDiffs = diffs.map((slice) {
-      List<num> diffValues = [];
-      for (var i = 0; i < slice.length - 1; i++) {
-        final current = slice[i].item!;
-        final next = slice[i + 1].item!;
-        final diff = next - current;
-        diffValues.add(diff);
-      }
-      return diffValues;
-    },).toList();
+    final allDiffs = diffs.map(
+      (slice) {
+        List<num> diffValues = [];
+        for (var i = 0; i < slice.length - 1; i++) {
+          final current = slice[i].item!;
+          final next = slice[i + 1].item!;
+          final diff = next - current;
+          diffValues.add(diff);
+        }
+        return diffValues;
+      },
+    ).toList();
 
     final newShape = shape;
     newShape[axis] -= 1;
 
     return NDList.from<X>(allDiffs).reshape(newShape);
   }
-}
-
-extension NumericalAggregation<X extends num> on RollingResult<X> {
-  NDList<X> sum() => reduce((e) => e.sum());
-
-  NDList<double> mean() => reduce((e) => e.mean());
-
-  NDList<X> median() => reduce((e) => e.median());
-
-  NDList<X> quantile(double q) => reduce((e) => e.quantile(q));
-
-  NDList<X> max() => reduce((e) => e.max());
-  NDList<X> min() => reduce((e) => e.min());
 }
 
 extension MultiLinear<X> on NDList<NDList<X>> {

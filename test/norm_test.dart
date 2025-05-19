@@ -72,7 +72,6 @@ void main() {
       expect(nd.norm(order: 1).list[0], closeTo(36.0, 1e-9));
     });
 
-
     test('L2 norm of 3D NDList', () {
       final nd = NDList.from<double>([
         [
@@ -89,6 +88,9 @@ void main() {
 
     // Two dimensions, test individual axis
     test('L1 norm along axis 1 of 2D NDList', () {
+      // [|1| + |-2|]
+      // [|3| + |4|]
+      // == [[3], [7]]
       final nd = NDList.from<double>([
         [1.0, -2.0],
         [3.0, 4.0],
@@ -146,7 +148,6 @@ void main() {
       final result = nd.norm(order: 1).list;
       expect(result.length, 1);
       expect(result[0], closeTo(36.0, 1e-9));
-
     });
 
     test('L1 norm along axis 0 of 3D NDList', () {
@@ -165,9 +166,12 @@ void main() {
       final nd = NDList.from<double>(data);
       final result = nd.norm(axis: 0, order: 1);
       expect(result.shape, equals([3, 4]));
-      expect(result[0].squeeze(), equals(NDList.from<double>([14.0, 16.0, 18.0, 20.0])));
-      expect(result[1].squeeze(), equals(NDList.from<double>([22.0, 24.0, 26.0, 28.0])));
-      expect(result[2].squeeze(), equals(NDList.from<double>([30.0, 32.0, 34.0, 36.0])));
+      expect(result[0].squeeze(),
+          equals(NDList.from<double>([14.0, 16.0, 18.0, 20.0])));
+      expect(result[1].squeeze(),
+          equals(NDList.from<double>([22.0, 24.0, 26.0, 28.0])));
+      expect(result[2].squeeze(),
+          equals(NDList.from<double>([30.0, 32.0, 34.0, 36.0])));
     });
 
     test('L1 norm along axis 1 of 3D NDList', () {
@@ -186,8 +190,10 @@ void main() {
       final nd = NDList.from<double>(data);
       final result = nd.norm(axis: 1, order: 1);
       expect(result.shape, equals([2, 4]));
-      expect(result[0].squeeze(), equals(NDList.from<double>([15.0, 18.0, 21.0, 24.0])));
-      expect(result[1].squeeze(), equals(NDList.from<double>([51.0, 54.0, 57.0, 60.0])));
+      expect(result[0].squeeze(),
+          equals(NDList.from<double>([15.0, 18.0, 21.0, 24.0])));
+      expect(result[1].squeeze(),
+          equals(NDList.from<double>([51.0, 54.0, 57.0, 60.0])));
     });
 
     test('L1 norm along axis 2 of 3D NDList', () {
@@ -206,8 +212,10 @@ void main() {
       final nd = NDList.from<double>(data);
       final result = nd.norm(axis: 2, order: 1);
       expect(result.shape, equals([2, 3]));
-      expect(result[0].squeeze(), equals(NDList.from<double>([10.0, 26.0, 42.0])));
-      expect(result[1].squeeze(), equals(NDList.from<double>([58.0, 74.0, 90.0])));
+      expect(
+          result[0].squeeze(), equals(NDList.from<double>([10.0, 26.0, 42.0])));
+      expect(
+          result[1].squeeze(), equals(NDList.from<double>([58.0, 74.0, 90.0])));
     });
   });
 }
